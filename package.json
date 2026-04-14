@@ -1,0 +1,24 @@
+{
+  "name": "multi-google-mcp",
+  "version": "1.0.0",
+  "description": "Local MCP server for connecting multiple Google accounts to Claude Code",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "setup": "tsx src/setup.ts",
+    "add-account": "tsx src/setup.ts --add-account",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "googleapis": "^148.0.0",
+    "open": "^10.1.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
