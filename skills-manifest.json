@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 2,
+  "project": "multi-google-mcp",
+  "bindings": [
+    {
+      "capability": "deep-search",
+      "canonical": [
+        "deep-search"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "recon",
+      "canonical": [
+        "recon"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "ultra-skill",
+      "canonical": [
+        "ultraskill"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "task-design",
+      "canonical": [
+        "design"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "work-scope",
+      "canonical": [
+        "work-scope"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "engineering-workflow",
+      "canonical": [
+        "brainstorming",
+        "using-git-worktrees",
+        "writing-plans",
+        "subagent-driven-development",
+        "executing-plans",
+        "systematic-debugging",
+        "test-driven-development",
+        "requesting-code-review",
+        "receiving-code-review",
+        "verification-before-completion",
+        "finishing-a-development-branch"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "interface-workflow",
+      "canonical": [
+        "impeccable"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "parallel-work",
+      "canonical": [
+        "dispatching-parallel-agents"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "skill-discovery",
+      "canonical": [
+        "using-superpowers"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "skill-authoring",
+      "canonical": [
+        "writing-skills"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "design-review",
+      "canonical": [
+        "design-review"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "docket",
+      "canonical": [
+        "docket"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "harden-tail",
+      "canonical": [
+        "pathway",
+        "solo-review",
+        "probe",
+        "hone",
+        "spar"
+      ],
+      "chain": "harden-tail",
+      "steps": [
+        "solo-review",
+        "probe",
+        "hone",
+        "spar"
+      ],
+      "delivery": "pathway"
+    },
+    {
+      "capability": "probe",
+      "canonical": [
+        "probe"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "spar",
+      "canonical": [
+        "spar"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "spec",
+      "canonical": [
+        "spec"
+      ],
+      "delivery": "vendored"
+    },
+    {
+      "capability": "correct",
+      "canonical": [
+        "correct"
+      ],
+      "delivery": "vendored"
+    }
+  ]
+}

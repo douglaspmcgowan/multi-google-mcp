@@ -1,0 +1,24 @@
+version: 2
+project: "multi-google-mcp"
+data_root_env: "PROJECT_DATA_ROOT"
+assets: []
+
+# Populate assets only when required project content lives outside Git.
+# Every adapter must name either a reviewed shared filename or a reviewed repository-relative
+# implementation under .agents/data (for example, .agents/data/Sync-ProjectData.ps1).
+# assets:
+#   - id: "stable-asset-id"
+#     project: "multi-google-mcp"
+#     class: "immutable-file|versioned-large-artifact|live-document-object-state|live-relational-state|local-transactional-state|portable-export|regenerable-output"
+#     authority: "<authoritative source, distinct from backups and caches>"
+#     local_destination: "inputs|runtime|outputs|private/<relative path>"
+#     adapter: "<ReviewedAdapter.ps1>"
+#     version_rule: "<version selection rule>"
+#     integrity_rule: "<SHA-256, provider-native equivalent, or database-native check>"
+#     restore_verifier: "<safe restore verification command or procedure>"
+#     regeneration_rule: "<required for regenerable-output>"
+#     recovery_rule: "<required for live or local mutable state>"
+#     retention_daily: 2
+#     retention_weekly: 2
+#     retention_monthly: 1
+#     stale_write_rule: "compare-and-swap|immutable-generations|single-writer-lease"

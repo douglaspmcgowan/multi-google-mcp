@@ -1,0 +1,8 @@
+---
+description: Load the portable repository contract
+alwaysApply: true
+---
+
+Read and follow repository-root `AGENTS.md`.
+
+Before work, read `TASK.md` and recent `LOG.md`. Read `MAP.md` for architecture, path questions, durable capability state, or **Search surfaces** when looking for information — and when root `MAP.md` is only a pointer, read the map it points at rather than stopping at the pointer; in a repository whose project is the harness itself that map is `.agents/MAP.md`. Read `DESIGN.md` for interface work and `PRODUCT.md` when present.
