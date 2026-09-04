@@ -6,9 +6,9 @@ Add Drive metadata and sharing tools to the multi-account Google MCP server, the
 
 ## Specs
 
-- [ ] The OAuth scopes contain the narrowest scope that supports metadata reads and permission creation for these pre-existing Berkeley file IDs.
-- [ ] `src/tools/drive.ts` exposes file metadata and permission-creation tools and `src/index.ts` registers them with the existing tool collections.
-- [ ] `npm run build` completes successfully with its real output recorded.
+- [x] The OAuth scopes contain the narrowest scope that supports metadata reads and permission creation for these pre-existing Berkeley file IDs.
+- [x] `src/tools/drive.ts` exposes file metadata and permission-creation tools and `src/index.ts` registers them with the existing tool collections.
+- [x] `npm run build` completes successfully with its real output recorded.
 - [ ] The authorization URL is generated without completing OAuth consent or handling credential values.
 - [ ] Each requested file is shared with `oneredfox21@gmail.com` as a reader only when a valid Berkeley token already has the required Drive scope; otherwise the exact scope failure is recorded and no share is attempted.
 - [ ] The branch and pull request state are recorded without pushing or merging into `main`.
@@ -23,16 +23,16 @@ Implement and verify Drive support, generate the safe OAuth URL, and perform the
 
 ## Queue
 
-- [ ] Inspect the existing implementation and current Google Drive authorization requirements — done when the scope choice and API shape are evidenced by repository code and current Google documentation.
-- [ ] Add failing Drive tests before production code — done when the focused test fails because `drive.ts` is missing.
-- [ ] Implement Drive scope, metadata, permission creation, and registration — done when the focused test and build pass.
+- [x] Inspect the existing implementation and current Google Drive authorization requirements — done when the scope choice and API shape are evidenced by repository code and current Google documentation.
+- [x] Add failing Drive tests before production code — done when the focused test fails because `drive.ts` is missing.
+- [x] Implement Drive scope, metadata, permission creation, and registration — done when the focused test and build pass.
 - [ ] Generate and print the authorization URL without completing consent — done when the URL is captured without credential values.
 - [ ] Check the existing Berkeley token scope and conditionally share the four file IDs — done when each result is recorded or the precise authorization blocker is recorded.
-- [ ] Commit the implementation, push the owned branch, and open a pull request — done when remote branch and PR evidence are available.
+- [!] Commit, push, and open a pull request — blocked on: GitHub rejected the authorized branch push with HTTP 403; no remote branch or PR exists.
 
 ## Blocked
 
-<!-- Record externally blocked work here. -->
+- [!] Generate the authorization URL and perform four Berkeley shares — blocked on: could-not-tell whether a valid Drive-scoped Berkeley token exists; protected credential-bearing host access was rejected. No share was attempted.
 
 ## Needs decision
 
@@ -41,10 +41,11 @@ Implement and verify Drive support, generate the safe OAuth URL, and perform the
 ## Completed
 
 - [x] Task state reconciled from the request before implementation.
+- [x] Drive implementation committed locally as `68f8c28`; focused tests passed and build passed.
 
 ## Verification
 
-- Next: `npm test -- --test-reporter=spec` focused on `test/drive.test.ts`, then `npm run build`; record OAuth and Drive API outcomes without credential values.
+- Evidence: `node --experimental-strip-types --test test/drive.test.ts`; `npm run build`.
 
 <!--
 Markers use a space for queued work, a tilde for active work, x for complete,
