@@ -2,25 +2,33 @@
 
 ## Intent
 
-<!-- Prose: why this project exists and what good looks like. Durable across requests. -->
+Add Drive metadata and sharing tools to the multi-account Google MCP server, then safely share the four specified Berkeley Drive files when an already-authorized Drive-scoped token permits it.
 
 ## Specs
 
-<!-- Testable statements of what must be true when the request is met, one checkbox each. -->
-<!-- Closure is graded against these, not against an empty queue. Tick one only against the same -->
-<!-- observable proof a task would have had to produce. There is no separate requirements list. -->
+- [ ] The OAuth scopes contain the narrowest scope that supports metadata reads and permission creation for these pre-existing Berkeley file IDs.
+- [ ] `src/tools/drive.ts` exposes file metadata and permission-creation tools and `src/index.ts` registers them with the existing tool collections.
+- [ ] `npm run build` completes successfully with its real output recorded.
+- [ ] The authorization URL is generated without completing OAuth consent or handling credential values.
+- [ ] Each requested file is shared with `oneredfox21@gmail.com` as a reader only when a valid Berkeley token already has the required Drive scope; otherwise the exact scope failure is recorded and no share is attempted.
+- [ ] The branch and pull request state are recorded without pushing or merging into `main`.
 
 ## Goal
 
-Record the active outcome when work begins.
+Implement and verify Drive support, generate the safe OAuth URL, and perform the four authorized shares if possible.
 
 ## Active
 
-<!-- Move the item currently being worked here. -->
+- [~] Implement Drive scope, tools, registration, tests, build, OAuth URL generation, and conditional Berkeley sharing — done when the specs above have observable evidence.
 
 ## Queue
 
-<!-- Add required work extracted from the request here. -->
+- [ ] Inspect the existing implementation and current Google Drive authorization requirements — done when the scope choice and API shape are evidenced by repository code and current Google documentation.
+- [ ] Add failing Drive tests before production code — done when the focused test fails because `drive.ts` is missing.
+- [ ] Implement Drive scope, metadata, permission creation, and registration — done when the focused test and build pass.
+- [ ] Generate and print the authorization URL without completing consent — done when the URL is captured without credential values.
+- [ ] Check the existing Berkeley token scope and conditionally share the four file IDs — done when each result is recorded or the precise authorization blocker is recorded.
+- [ ] Commit the implementation, push the owned branch, and open a pull request — done when remote branch and PR evidence are available.
 
 ## Blocked
 
@@ -32,11 +40,11 @@ Record the active outcome when work begins.
 
 ## Completed
 
-<!-- Keep only current completion evidence here; durable history belongs in LOG.md. -->
+- [x] Task state reconciled from the request before implementation.
 
 ## Verification
 
-- Next: record the exact command or observable proof when work begins.
+- Next: `npm test -- --test-reporter=spec` focused on `test/drive.test.ts`, then `npm run build`; record OAuth and Drive API outcomes without credential values.
 
 <!--
 Markers use a space for queued work, a tilde for active work, x for complete,

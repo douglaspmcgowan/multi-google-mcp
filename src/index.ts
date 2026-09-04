@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { gmailTools } from "./tools/gmail.js";
 import { calendarTools } from "./tools/calendar.js";
+import { driveTools } from "./tools/drive.js";
 import { getAccountNames } from "./config.js";
 import { z } from "zod";
 
@@ -41,7 +42,7 @@ function jsonSchemaToZod(schema: any): Record<string, any> {
 }
 
 // Register all tools
-const allTools = [...gmailTools, ...calendarTools];
+const allTools = [...gmailTools, ...calendarTools, ...driveTools];
 
 for (const tool of allTools) {
   const zodShape = jsonSchemaToZod(tool.inputSchema);
