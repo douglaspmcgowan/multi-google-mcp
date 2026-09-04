@@ -1,4 +1,7 @@
 import { google } from "googleapis";
+import fs from "fs";
+import path from "path";
+import { pipeline } from "stream/promises";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
@@ -75,6 +78,35 @@ export function createDriveTools(
         const drive = getClient(args.account);
         const res = await drive.permissions.list({ fileId: args.file_id, fields: permissionFields });
         return { content: [{ type: "text" as const, text: JSON.stringify(res.data.permissions || [], null, 2) }] };
+      },
+    },
+    {
+      name: "drive_download",
+      description: `Download a Drive file to disk. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account: { type: "string", description: "Account label" },
+          file_id: { type: "string", description: "Drive file ID" },
+          destination_path: { type: "string", description: "Destination path on disk" },
+        },
+        required: ["account", "file_id", "destination_path"],
+      },
+      handler: async (args: { account: string; file_id: string; destination_path: string }) => {
+        const drive = getClient(args.account);
+        fs.mkdirSync(path.dirname(args.destination_path), { recursive: true });
+        const res = await drive.files.get(
+          { fileId: args.file_id, alt: "media" },
+          { responseType: "stream" }
+        );
+        await pipeline(res.data, fs.createWriteStream(args.destination_path));
+        const byteCount = fs.statSync(args.destination_path).size;
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({ path: args.destination_path, byteCount }, null, 2),
+          }],
+        };
       },
     },
     {
