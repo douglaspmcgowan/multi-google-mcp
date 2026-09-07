@@ -1,14 +1,14 @@
-import { google } from "googleapis";
+import { drive, drive_v3 } from "@googleapis/drive";
 import fs from "fs";
 import path from "path";
 import { pipeline } from "stream/promises";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
-type DriveClient = ReturnType<typeof google.drive>;
+type DriveClient = drive_v3.Drive;
 
 function getDrive(account: string): DriveClient {
-  return google.drive({ version: "v3", auth: getAuthenticatedClient(account) });
+  return drive({ version: "v3", auth: getAuthenticatedClient(account) });
 }
 
 function accountDescription(getAccounts: () => string[]): string {

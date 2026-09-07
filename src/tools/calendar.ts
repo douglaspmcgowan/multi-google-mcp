@@ -1,10 +1,10 @@
-import { google } from "googleapis";
+import { calendar } from "@googleapis/calendar";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
 function getCalendar(account: string) {
   const auth = getAuthenticatedClient(account);
-  return google.calendar({ version: "v3", auth });
+  return calendar({ version: "v3", auth });
 }
 
 function accountDescription() {

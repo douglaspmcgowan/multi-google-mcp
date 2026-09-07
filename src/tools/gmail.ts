@@ -1,10 +1,10 @@
-import { google } from "googleapis";
+import { gmail } from "@googleapis/gmail";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
 function getGmail(account: string) {
   const auth = getAuthenticatedClient(account);
-  return google.gmail({ version: "v1", auth });
+  return gmail({ version: "v1", auth });
 }
 
 function accountDescription() {

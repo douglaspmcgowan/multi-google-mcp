@@ -1,4 +1,4 @@
-import { google } from "googleapis";
+import { OAuth2Client } from "google-auth-library";
 import http from "http";
 import { URL } from "url";
 import open from "open";
@@ -11,7 +11,7 @@ import {
 } from "./config.js";
 
 export function createOAuth2Client(clientId: string, clientSecret: string) {
-  return new google.auth.OAuth2(clientId, clientSecret, REDIRECT_URI);
+  return new OAuth2Client(clientId, clientSecret, REDIRECT_URI);
 }
 
 export function getAuthenticatedClient(accountName: string) {
