@@ -1,10 +1,10 @@
-import { calendar } from "@googleapis/calendar";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
-function getCalendar(account: string) {
+async function getCalendar(account: string) {
+  const { calendar } = await import("@googleapis/calendar");
   const auth = getAuthenticatedClient(account);
-  return calendar({ version: "v3", auth });
+  return calendar({ version: "v3", auth: auth as never });
 }
 
 function accountDescription() {
@@ -35,7 +35,7 @@ export const calendarTools = [
       time_max?: string;
       calendar_id?: string;
     }) => {
-      const cal = getCalendar(args.account);
+      const cal = await getCalendar(args.account);
       const res = await cal.events.list({
         calendarId: args.calendar_id || "primary",
         timeMin: args.time_min || new Date().toISOString(),
@@ -90,7 +90,7 @@ export const calendarTools = [
       attendees?: string[];
       calendar_id?: string;
     }) => {
-      const cal = getCalendar(args.account);
+      const cal = await getCalendar(args.account);
       const res = await cal.events.insert({
         calendarId: args.calendar_id || "primary",
         requestBody: {
@@ -140,7 +140,7 @@ export const calendarTools = [
       location?: string;
       calendar_id?: string;
     }) => {
-      const cal = getCalendar(args.account);
+      const cal = await getCalendar(args.account);
       const body: Record<string, any> = {};
       if (args.summary) body.summary = args.summary;
       if (args.description) body.description = args.description;
@@ -172,7 +172,7 @@ export const calendarTools = [
       required: ["account", "event_id"],
     },
     handler: async (args: { account: string; event_id: string; calendar_id?: string }) => {
-      const cal = getCalendar(args.account);
+      const cal = await getCalendar(args.account);
       await cal.events.delete({
         calendarId: args.calendar_id || "primary",
         eventId: args.event_id,
@@ -191,7 +191,7 @@ export const calendarTools = [
       required: ["account"],
     },
     handler: async (args: { account: string }) => {
-      const cal = getCalendar(args.account);
+      const cal = await getCalendar(args.account);
       const res = await cal.calendarList.list();
       const calendars = (res.data.items || []).map((c) => ({
         id: c.id,

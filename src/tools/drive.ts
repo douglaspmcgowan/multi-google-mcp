@@ -1,4 +1,4 @@
-import { drive, drive_v3 } from "@googleapis/drive";
+import type { drive_v3 } from "@googleapis/drive";
 import fs from "fs";
 import path from "path";
 import { pipeline } from "stream/promises";
@@ -7,8 +7,9 @@ import { getAccountNames } from "../config.js";
 
 type DriveClient = drive_v3.Drive;
 
-function getDrive(account: string): DriveClient {
-  return drive({ version: "v3", auth: getAuthenticatedClient(account) });
+async function getDrive(account: string): Promise<DriveClient> {
+  const { drive } = await import("@googleapis/drive");
+  return drive({ version: "v3", auth: getAuthenticatedClient(account) as never });
 }
 
 function accountDescription(getAccounts: () => string[]): string {
@@ -26,7 +27,7 @@ const fileFields = "id,name,mimeType,description,createdTime,modifiedTime,size,w
 const permissionFields = "permissions(id,type,emailAddress,displayName,role,allowFileDiscovery,expirationTime)";
 
 export function createDriveTools(
-  getClient: (account: string) => DriveClient = getDrive,
+  getClient: (account: string) => DriveClient | Promise<DriveClient> = getDrive,
   getAccounts: () => string[] = getAccountNames
 ) {
   return [
@@ -43,7 +44,7 @@ export function createDriveTools(
         required: ["account", "query"],
       },
       handler: async (args: { account: string; query: string; max_results?: number }) => {
-        const drive = getClient(args.account);
+        const drive = await getClient(args.account);
         const res = await drive.files.list({
           q: args.query,
           pageSize: args.max_results || 10,
@@ -61,7 +62,7 @@ export function createDriveTools(
         required: ["account", "file_id"],
       },
       handler: async (args: { account: string; file_id: string }) => {
-        const drive = getClient(args.account);
+        const drive = await getClient(args.account);
         const res = await drive.files.get({ fileId: args.file_id, fields: fileFields });
         return { content: [{ type: "text" as const, text: JSON.stringify(res.data, null, 2) }] };
       },
@@ -75,7 +76,7 @@ export function createDriveTools(
         required: ["account", "file_id"],
       },
       handler: async (args: { account: string; file_id: string }) => {
-        const drive = getClient(args.account);
+        const drive = await getClient(args.account);
         const res = await drive.permissions.list({ fileId: args.file_id, fields: permissionFields });
         return { content: [{ type: "text" as const, text: JSON.stringify(res.data.permissions || [], null, 2) }] };
       },
@@ -93,7 +94,7 @@ export function createDriveTools(
         required: ["account", "file_id", "destination_path"],
       },
       handler: async (args: { account: string; file_id: string; destination_path: string }) => {
-        const drive = getClient(args.account);
+        const drive = await getClient(args.account);
         fs.mkdirSync(path.dirname(args.destination_path), { recursive: true });
         const res = await drive.files.get(
           { fileId: args.file_id, alt: "media" },
@@ -123,7 +124,7 @@ export function createDriveTools(
         required: ["account", "file_id", "email", "role"],
       },
       handler: async (args: { account: string; file_id: string; email: string; role: string }) => {
-        const drive = getClient(args.account);
+        const drive = await getClient(args.account);
         const res = await drive.permissions.create({
           fileId: args.file_id,
           sendNotificationEmail: true,
