@@ -34,6 +34,26 @@ Implement and verify Drive support, generate the safe OAuth URL, and perform the
 
 - [!] Generate the authorization URL and perform four Berkeley shares — blocked on: could-not-tell whether a valid Drive-scoped Berkeley token exists; protected credential-bearing host access was rejected. No share was attempted.
 
+
+## AY26-27 follow-on, 2026-09-16
+
+Douglas: *"change the multi-google-mcp so it allows you to do more stuff in drive plz. you should not
+be doing this in browser in the future."*
+
+- [x] Drive write tools: `drive_create`, `drive_update_content`, `drive_upload`, `drive_export`,
+      `drive_rename`, `drive_move`, `drive_copy`, `drive_trash`, `drive_untrash`, `drive_unshare`.
+      `npm run build` clean; `npx tsx --test test/drive.test.ts` 11/11 pass.
+- [x] Formatted Google Docs without the Docs API: `html` passed to `drive_create` or
+      `drive_update_content` is converted by Drive with headings, bold, links and tables intact.
+      Proved live against `dpm5970@berkeley.edu` by rewriting doc
+      `13aZjfGzoeYBbPTq6OAZfkP5ypiuDbVBCLR-ZBcuaMMY`.
+- [x] No permanent-delete tool. Trash is the whole delete surface, so nothing is unrecoverable.
+- [x] No re-consent needed: `SCOPES` already requested full `auth/drive` and the `berkeley`,
+      `personal` and `pyrgos` tokens carry it. **`bhouse` does not** and needs `npm run add-account`
+      before any Drive call.
+- [x] Documented in `~/.agents/references/multi-google.md`, and `~/.agents/AGENTS.md` now says Drive
+      work never goes through a browser.
+
 ## Needs decision
 
 <!-- Record items requiring a user decision here. -->
