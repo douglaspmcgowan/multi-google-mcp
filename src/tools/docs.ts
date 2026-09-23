@@ -1,9 +1,22 @@
 import type { docs_v1 } from "@googleapis/docs";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
+import type { drive_v3 } from "@googleapis/drive";
+import {
+  bodyToMarkdown,
+  headingsIn,
+  parseMarkdown,
+  type HeadingRef,
+  type InlineRun,
+} from "../markdown.js";
 
 type DocsClient = docs_v1.Docs;
 type Request = Record<string, unknown>;
+
+async function getDriveClient(account: string): Promise<drive_v3.Drive> {
+  const { drive } = await import("@googleapis/drive");
+  return drive({ version: "v3", auth: getAuthenticatedClient(account) as never });
+}
 
 async function getDocs(account: string): Promise<DocsClient> {
   const { docs } = await import("@googleapis/docs");
@@ -233,6 +246,10 @@ export interface WriteParagraph {
   list?: string;
   /** List nesting level, 0-8. Ignored without `list`. */
   level?: number;
+  /** Optional styled spans (UTF-16 offsets into `text`): bold, italic, code, link. */
+  runs?: InlineRun[];
+  /** Render the whole paragraph monospace (a code-block line). */
+  code?: boolean;
 }
 
 const BULLET_PRESETS: Record<string, string> = {
@@ -240,23 +257,9 @@ const BULLET_PRESETS: Record<string, string> = {
   numbered: "NUMBERED_DECIMAL_ALPHA_ROMAN",
 };
 
-/**
- * Builds the batch that replaces a tab body with `paragraphs`, computing every
- * index itself.
- *
- * Order matters because a batch applies sequentially: clear the body (the
- * final newline cannot be deleted, so it becomes the last paragraph's end),
- * insert all text at index 1, reset inherited text style and bullets, set
- * each paragraph's named style, then create lists last-group-first. List
- * nesting comes from leading tabs, which createParagraphBullets removes; doing
- * the later groups first keeps the earlier groups' indices valid.
- */
-export function buildWriteTabRequests(
-  tabId: string,
-  bodyEnd: number,
-  paragraphs: WriteParagraph[]
-): Request[] {
-  const items: WriteParagraph[] = paragraphs.length ? paragraphs : [{ text: "" }];
+const CODE_FONT = { fontFamily: "Courier New" };
+
+function validateParagraphs(items: WriteParagraph[]): void {
   for (const [i, p] of items.entries()) {
     if (typeof p.text !== "string") throw new Error(`paragraph ${i} has no text`);
     if (p.text.includes("\n")) {
@@ -272,12 +275,41 @@ export function buildWriteTabRequests(
     if (p.level !== undefined && (!Number.isInteger(p.level) || p.level < 0 || p.level > 8)) {
       throw new Error(`paragraph ${i} level must be an integer 0-8`);
     }
+    for (const run of p.runs ?? []) {
+      if (!(run.start >= 0 && run.end <= p.text.length && run.start < run.end)) {
+        throw new Error(`paragraph ${i} has a run outside its text (${run.start}-${run.end})`);
+      }
+    }
   }
+}
 
-  const texts = items.map((p) => (p.list ? "\t".repeat(p.level ?? 0) : "") + p.text);
+/**
+ * Builds the requests that insert `paragraphs` at `insertAt` in one tab,
+ * computing every index. `lead` is text inserted before the first paragraph
+ * ("\n" when appending after a non-empty last paragraph).
+ *
+ * Order matters because a batch applies sequentially: insert all text, reset
+ * inherited text style and bullets, set each paragraph's named style, apply
+ * inline styles, then create lists last-group-first. List nesting comes from
+ * leading tabs, which createParagraphBullets removes; doing the later groups
+ * first keeps the earlier groups' indices valid, and inline styles are applied
+ * before any tab is removed.
+ */
+function buildInsertRequests(
+  tabId: string,
+  insertAt: number,
+  paragraphs: WriteParagraph[],
+  lead = ""
+): Request[] {
+  const items: WriteParagraph[] = paragraphs.length ? paragraphs : [{ text: "" }];
+  validateParagraphs(items);
+
+  const prefixes = items.map((p) => (p.list ? "\t".repeat(p.level ?? 0) : ""));
+  const texts = items.map((p, i) => prefixes[i] + p.text);
   const text = texts.join("\n");
+  const first = insertAt + lead.length;
   const ranges: Array<{ start: number; end: number }> = [];
-  let cursor = 1;
+  let cursor = first;
   for (const t of texts) {
     ranges.push({ start: cursor, end: cursor + t.length + 1 });
     cursor += t.length + 1;
@@ -286,12 +318,13 @@ export function buildWriteTabRequests(
   const range = (startIndex: number, endIndex: number) => ({ startIndex, endIndex, tabId });
 
   const requests: Request[] = [];
-  if (bodyEnd - 1 > 1) requests.push({ deleteContentRange: { range: range(1, bodyEnd - 1) } });
-  if (text.length) {
-    requests.push({ insertText: { location: { index: 1, tabId }, text } });
-    requests.push({ updateTextStyle: { range: range(1, 1 + text.length), textStyle: {}, fields: "*" } });
+  if (lead.length + text.length) {
+    requests.push({ insertText: { location: { index: insertAt, tabId }, text: lead + text } });
   }
-  requests.push({ deleteParagraphBullets: { range: range(1, allEnd) } });
+  if (text.length) {
+    requests.push({ updateTextStyle: { range: range(first, first + text.length), textStyle: {}, fields: "*" } });
+  }
+  requests.push({ deleteParagraphBullets: { range: range(first, allEnd) } });
   items.forEach((p, i) => {
     const plain = !p.list;
     requests.push({
@@ -307,6 +340,43 @@ export function buildWriteTabRequests(
         fields: plain ? "namedStyleType,indentStart,indentFirstLine" : "namedStyleType",
       },
     });
+  });
+
+  items.forEach((p, i) => {
+    const base = ranges[i].start + prefixes[i].length;
+    if (p.code && p.text.length) {
+      requests.push({
+        updateTextStyle: {
+          range: range(base, base + p.text.length),
+          textStyle: { weightedFontFamily: CODE_FONT },
+          fields: "weightedFontFamily",
+        },
+      });
+    }
+    for (const run of p.runs ?? []) {
+      const textStyle: Record<string, unknown> = {};
+      const fields: string[] = [];
+      if (run.bold) {
+        textStyle.bold = true;
+        fields.push("bold");
+      }
+      if (run.italic) {
+        textStyle.italic = true;
+        fields.push("italic");
+      }
+      if (run.code) {
+        textStyle.weightedFontFamily = CODE_FONT;
+        fields.push("weightedFontFamily");
+      }
+      if (run.link) {
+        textStyle.link = { url: run.link };
+        fields.push("link");
+      }
+      if (!fields.length) continue;
+      requests.push({
+        updateTextStyle: { range: range(base + run.start, base + run.end), textStyle, fields: fields.join(",") },
+      });
+    }
   });
 
   const groups: Array<{ first: number; last: number; list: string }> = [];
@@ -327,9 +397,63 @@ export function buildWriteTabRequests(
   return requests;
 }
 
+/**
+ * Builds the batch that replaces a tab body with `paragraphs`: clear the body
+ * (the final newline cannot be deleted, so it becomes the last paragraph's
+ * end), then insert at index 1.
+ */
+export function buildWriteTabRequests(
+  tabId: string,
+  bodyEnd: number,
+  paragraphs: WriteParagraph[]
+): Request[] {
+  validateParagraphs(paragraphs);
+  const requests: Request[] = [];
+  if (bodyEnd - 1 > 1) {
+    requests.push({ deleteContentRange: { range: { startIndex: 1, endIndex: bodyEnd - 1, tabId } } });
+  }
+  return requests.concat(buildInsertRequests(tabId, 1, paragraphs));
+}
+
+/**
+ * Builds the batch that appends `paragraphs` after a tab's existing content
+ * without touching it. An empty last paragraph is reused; otherwise a newline
+ * is inserted first so the new text starts its own paragraph.
+ */
+export function buildAppendRequests(
+  tabId: string,
+  body: docs_v1.Schema$Body | undefined | null,
+  paragraphs: WriteParagraph[]
+): Request[] {
+  if (!paragraphs.length) throw new Error("nothing to append");
+  const content = body?.content ?? [];
+  const end = bodyEndIndex(body);
+  const last = content[content.length - 1];
+  const lastText = (last?.paragraph?.elements ?? []).map((r) => r.textRun?.content ?? "").join("");
+  const lastEmpty = !last?.paragraph || lastText === "\n" || lastText === "";
+  return buildInsertRequests(tabId, end - 1, paragraphs, lastEmpty ? "" : "\n");
+}
+
+function localDate(now: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Paragraphs from either `markdown` or structured `paragraphs`, exactly one of which is given. */
+function paragraphsFrom(args: { markdown?: string; paragraphs?: WriteParagraph[] }): WriteParagraph[] {
+  if (args.markdown !== undefined && args.paragraphs !== undefined) {
+    throw new Error("pass markdown or paragraphs, not both");
+  }
+  if (args.markdown !== undefined) return parseMarkdown(args.markdown);
+  if (Array.isArray(args.paragraphs)) return args.paragraphs;
+  throw new Error("pass markdown or paragraphs");
+}
+
 export function createDocsTools(
   getClient: (account: string) => DocsClient | Promise<DocsClient> = getDocs,
-  getAccounts: () => string[] = getAccountNames
+  getAccounts: () => string[] = getAccountNames,
+  getDrive: (account: string) => drive_v3.Drive | Promise<drive_v3.Drive> = getDriveClient,
+  now: () => Date = () => new Date()
 ) {
   const account = { type: "string" as const, description: "Account label" };
   const documentId = { type: "string" as const, description: "Google Doc file ID" };
@@ -554,6 +678,236 @@ export function createDocsTools(
           paragraphsWritten: args.paragraphs.length,
           requestsSent: requests.length,
         });
+      },
+    },
+    {
+      name: "docs_write_markdown",
+      description:
+        "Write markdown into a Google Doc as real formatting: # headings (HEADING_1..6), - / * " +
+        "bullets and 1. numbered lists (nesting by indentation), **bold**, *italic*, `code`, " +
+        "[links](url), ``` fenced code (monospace lines) and > quotes (italic). Two modes: give " +
+        "document_id + tab_id to REPLACE that tab's whole body (like docs_write_tab), or give " +
+        "title (and optional parent_id folder) to CREATE a new Doc. Tables become plain text " +
+        `lines. To add to a tab without rewriting it, use docs_append_to_tab. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          markdown: { type: "string" as const, description: "Markdown source" },
+          document_id: { type: "string" as const, description: "Existing Doc to write into (replace mode; needs tab_id)" },
+          tab_id: tabIdProp("Tab whose body is replaced (replace mode)"),
+          title: { type: "string" as const, description: "Title of a new Doc (create mode)" },
+          parent_id: { type: "string" as const, description: "Optional Drive folder for the new Doc (create mode)" },
+        },
+        required: ["account", "markdown"],
+      },
+      handler: async (args: {
+        account: string;
+        markdown: string;
+        document_id?: string;
+        tab_id?: string;
+        title?: string;
+        parent_id?: string;
+      }) => {
+        const paragraphs = parseMarkdown(args.markdown);
+        let documentId = args.document_id;
+        let created = false;
+        if (documentId) {
+          if (!args.tab_id) throw new Error("replace mode needs tab_id (see docs_list_tabs; the first tab is usually t.0)");
+          if (args.title || args.parent_id) throw new Error("title/parent_id apply only when creating; omit document_id to create");
+        } else {
+          if (!args.title) throw new Error("pass document_id + tab_id to replace a tab, or title to create a new Doc");
+          if (args.parent_id) {
+            const drive = await getDrive(args.account);
+            const res = await drive.files.create({
+              requestBody: {
+                name: args.title,
+                mimeType: "application/vnd.google-apps.document",
+                parents: [args.parent_id],
+              },
+              fields: "id",
+              supportsAllDrives: true,
+            } as never);
+            documentId = (res.data as { id?: string }).id ?? undefined;
+          } else {
+            const docs = await getClient(args.account);
+            const res = await docs.documents.create({ requestBody: { title: args.title } } as never);
+            documentId = (res.data as docs_v1.Schema$Document).documentId ?? undefined;
+          }
+          if (!documentId) throw new Error("Google did not return the new document's id");
+          created = true;
+        }
+        const { docs, doc } = await getWithTabs(args.account, documentId);
+        const tab = args.tab_id ? findTab(doc, args.tab_id) : flattenTabs(doc)[0];
+        const tabId = tab?.tabProperties?.tabId ?? args.tab_id ?? "t.0";
+        const requests = buildWriteTabRequests(tabId, bodyEndIndex(tab?.documentTab?.body ?? doc.body), paragraphs);
+        await docs.documents.batchUpdate({ documentId, requestBody: { requests } } as never);
+        return asText({
+          documentId,
+          tabId,
+          created,
+          url: `https://docs.google.com/document/d/${documentId}/edit?tab=${tabId}`,
+          paragraphsWritten: paragraphs.length,
+          requestsSent: requests.length,
+        });
+      },
+    },
+    {
+      name: "docs_append_to_tab",
+      description:
+        "Append a section to the END of one tab without rewriting or re-indexing what is " +
+        "already there — the safe way to add a log entry, meeting note or dated update to a " +
+        "shared tab. Content is markdown (same subset as docs_write_markdown) or structured " +
+        "paragraphs ({text, style?, list?, level?}). Optional heading is added first " +
+        "(heading_style default HEADING_2); date_prefix=true prefixes it with today's date " +
+        `(YYYY-MM-DD). ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          document_id: documentId,
+          tab_id: tabIdProp("Tab to append to (from docs_list_tabs; the first tab is usually t.0)"),
+          markdown: { type: "string" as const, description: "Markdown to append (or use paragraphs)" },
+          paragraphs: {
+            type: "array" as const,
+            description: "Structured paragraphs to append (or use markdown)",
+            items: {
+              type: "object" as const,
+              properties: {
+                text: { type: "string" as const, description: "Paragraph text, no newlines" },
+                style: { type: "string" as const, description: "NORMAL_TEXT (default), TITLE, SUBTITLE, HEADING_1..6" },
+                list: { type: "string" as const, description: "Optional: bullet or numbered" },
+                level: { type: "number" as const, description: "List nesting level 0-8 (default 0)" },
+              },
+              required: ["text"],
+            },
+          },
+          heading: { type: "string" as const, description: "Optional heading placed before the content" },
+          heading_style: { type: "string" as const, description: "Style for heading (default HEADING_2)" },
+          date_prefix: { type: "boolean" as const, description: "Prefix the heading (or a new heading) with today's date" },
+        },
+        required: ["account", "document_id", "tab_id"],
+      },
+      handler: async (args: {
+        account: string;
+        document_id: string;
+        tab_id: string;
+        markdown?: string;
+        paragraphs?: WriteParagraph[];
+        heading?: string;
+        heading_style?: string;
+        date_prefix?: boolean;
+      }) => {
+        const content = paragraphsFrom(args);
+        const heading =
+          args.date_prefix
+            ? args.heading
+              ? `${localDate(now())} — ${args.heading}`
+              : localDate(now())
+            : args.heading;
+        const paragraphs: WriteParagraph[] = heading
+          ? [{ text: heading, style: args.heading_style ?? "HEADING_2" }, ...content]
+          : content;
+        const { docs, doc } = await getWithTabs(args.account, args.document_id);
+        const tab = findTab(doc, args.tab_id);
+        const requests = buildAppendRequests(args.tab_id, tab.documentTab?.body, paragraphs);
+        await docs.documents.batchUpdate({ documentId: args.document_id, requestBody: { requests } } as never);
+        return asText({
+          documentId: args.document_id,
+          tabId: args.tab_id,
+          appendedAt: bodyEndIndex(tab.documentTab?.body) - 1,
+          paragraphsAppended: paragraphs.length,
+          requestsSent: requests.length,
+        });
+      },
+    },
+    {
+      name: "docs_read_markdown",
+      description:
+        "Read a Google Doc — or one tab — back as compact markdown: headings, nested bullet and " +
+        "numbered lists, bold, italic, code (monospace), links and tables. Far smaller than " +
+        "docs_get_structure; use it to read content, and docs_get_structure when you need " +
+        "indices. Without tab_id a multi-tab doc returns every tab, each introduced by a " +
+        `'<!-- tab t.x: Title -->' line. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          document_id: documentId,
+          tab_id: tabIdProp("Optional: read only this tab"),
+        },
+        required: ["account", "document_id"],
+      },
+      handler: async (args: { account: string; document_id: string; tab_id?: string }) => {
+        const { doc } = await getWithTabs(args.account, args.document_id);
+        const tabs = flattenTabs(doc);
+        let text: string;
+        if (tabs.length === 0) {
+          text = bodyToMarkdown(doc.body, doc.lists);
+        } else if (args.tab_id || tabs.length === 1) {
+          const tab = args.tab_id ? findTab(doc, args.tab_id) : tabs[0];
+          text = bodyToMarkdown(tab.documentTab?.body, tab.documentTab?.lists);
+        } else {
+          text = tabs
+            .map((tab) => {
+              const p = tab.tabProperties ?? {};
+              return `<!-- tab ${p.tabId}: ${p.title ?? ""} -->\n\n${bodyToMarkdown(tab.documentTab?.body, tab.documentTab?.lists)}`;
+            })
+            .join("\n");
+        }
+        return { content: [{ type: "text" as const, text: text || "(empty)" }] };
+      },
+    },
+    {
+      name: "docs_heading_link",
+      description:
+        "Return a URL that deep-links to a heading in a Google Doc " +
+        "(https://docs.google.com/document/d/<id>/edit?tab=<tabId>#heading=h.xxx). Match by " +
+        "heading text (case-insensitive; exact match wins over substring) or heading_id; omit " +
+        "both to list every heading's link. Searches every tab unless tab_id is given. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          document_id: documentId,
+          heading: { type: "string" as const, description: "Heading text to find" },
+          heading_id: { type: "string" as const, description: "Exact heading id, e.g. h.abc123" },
+          tab_id: tabIdProp("Optional: search only this tab"),
+        },
+        required: ["account", "document_id"],
+      },
+      handler: async (args: {
+        account: string;
+        document_id: string;
+        heading?: string;
+        heading_id?: string;
+        tab_id?: string;
+      }) => {
+        const { doc } = await getWithTabs(args.account, args.document_id);
+        const id = doc.documentId ?? args.document_id;
+        const tabs = args.tab_id ? [findTab(doc, args.tab_id)] : flattenTabs(doc);
+        const all: HeadingRef[] = tabs.length
+          ? tabs.flatMap((tab) =>
+              headingsIn(id, tab.documentTab?.body, tab.tabProperties?.tabId ?? "", tab.tabProperties?.title ?? "")
+            )
+          : headingsIn(id, doc.body, "", "");
+        if (!args.heading && !args.heading_id) return asText({ documentId: id, headings: all });
+        let matches: HeadingRef[];
+        if (args.heading_id) {
+          matches = all.filter((h) => h.headingId === args.heading_id);
+        } else {
+          const wanted = args.heading!.trim().toLowerCase();
+          const exact = all.filter((h) => h.text.toLowerCase() === wanted);
+          matches = exact.length ? exact : all.filter((h) => h.text.toLowerCase().includes(wanted));
+        }
+        if (!matches.length) {
+          const known = all.slice(0, 40).map((h) => `${h.tabId}: ${h.text}`);
+          throw new Error(
+            `no heading matches ${JSON.stringify(args.heading_id ?? args.heading)}; headings: ${known.join(" | ") || "none"}`
+          );
+        }
+        return asText(matches.length === 1 ? matches[0] : { documentId: id, matches });
       },
     },
     {

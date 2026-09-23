@@ -132,9 +132,10 @@ export async function runOAuthFlow(accountLabel: string): Promise<void> {
     });
 
     // Timeout after 2 minutes
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       server.close();
       reject(new Error("OAuth flow timed out after 2 minutes"));
     }, 120_000);
+    server.on("close", () => clearTimeout(timer));
   });
 }

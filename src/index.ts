@@ -6,6 +6,10 @@ import { driveTools } from "./tools/drive.js";
 import { docsTools } from "./tools/docs.js";
 import { slidesTools } from "./tools/slides.js";
 import { sheetsTools } from "./tools/sheets.js";
+import { commentTools } from "./tools/comments.js";
+import { chatTools } from "./tools/chat.js";
+import { formsTools } from "./tools/forms.js";
+import { reauthCommand } from "./scopes.js";
 import { getAccountNames } from "./config.js";
 import { jsonSchemaToZod } from "./schema.js";
 
@@ -22,6 +26,9 @@ const allTools = [
   ...docsTools,
   ...slidesTools,
   ...sheetsTools,
+  ...commentTools,
+  ...chatTools,
+  ...formsTools,
 ];
 
 for (const tool of allTools) {
@@ -37,7 +44,7 @@ for (const tool of allTools) {
           content: [
             {
               type: "text" as const,
-              text: `Authentication expired for account "${args.account}". Run this in the terminal to re-authenticate:\n\ncd ~/multi-google-mcp && npm run add-account`,
+              text: `Authentication expired for account "${args.account}". Run this in PowerShell to re-authenticate:\n\n${reauthCommand(args.account)}`,
             },
           ],
           isError: true,
