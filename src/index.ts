@@ -7,42 +7,12 @@ import { docsTools } from "./tools/docs.js";
 import { slidesTools } from "./tools/slides.js";
 import { sheetsTools } from "./tools/sheets.js";
 import { getAccountNames } from "./config.js";
-import { z } from "zod";
+import { jsonSchemaToZod } from "./schema.js";
 
 const server = new McpServer({
   name: "multi-google",
   version: "1.0.0",
 });
-
-// Convert JSON Schema-style inputSchema to Zod schemas for the MCP SDK
-function jsonSchemaToZod(schema: any): Record<string, any> {
-  const shape: Record<string, any> = {};
-  const props = schema.properties || {};
-  const required = new Set(schema.required || []);
-
-  for (const [key, prop] of Object.entries(props) as any[]) {
-    let zodType: any;
-    if (prop.type === "string") {
-      zodType = z.string().describe(prop.description || "");
-    } else if (prop.type === "number") {
-      zodType = z.number().describe(prop.description || "");
-    } else if (prop.type === "boolean") {
-      zodType = z.boolean().describe(prop.description || "");
-    } else if (prop.type === "array") {
-      zodType = z.array(z.string()).describe(prop.description || "");
-    } else {
-      zodType = z.string().describe(prop.description || "");
-    }
-
-    if (!required.has(key)) {
-      zodType = zodType.optional();
-    }
-
-    shape[key] = zodType;
-  }
-
-  return shape;
-}
 
 // Register all tools
 const allTools = [
