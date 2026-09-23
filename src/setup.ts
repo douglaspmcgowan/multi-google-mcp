@@ -2,6 +2,7 @@ import readline from "readline";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { fileURLToPath } from "url";
 import { loadConfig, saveConfig, CONFIG_DIR_PATH } from "./config.js";
 import { runOAuthFlow } from "./auth.js";
 
@@ -96,6 +97,21 @@ async function setupCredentials(): Promise<void> {
   console.log(`\n  Credentials saved to ${CONFIG_DIR_PATH}/config.json\n`);
 }
 
+/**
+ * The account label given on the command line, for a non-interactive re-auth:
+ * `--account <label>`, `--account=<label>`, or a bare positional label (which
+ * survives PowerShell and npm eating a `--` separator).
+ */
+export function accountFromArgs(argv: string[]): string | undefined {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--account") return args[i + 1];
+    if (arg.startsWith("--account=")) return arg.slice("--account=".length);
+  }
+  return args.find((arg) => !arg.startsWith("-"));
+}
+
 async function addAccount(): Promise<void> {
   const config = loadConfig();
   const existing = Object.keys(config.accounts);
@@ -132,10 +148,7 @@ function registerWithClaudeCode(): void {
   console.log("  Registering MCP server with Claude Code...\n");
 
   // Resolve the actual project directory from package.json location
-  const projectDir = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
-    ".."
-  );
+  const projectDir = projectRoot();
   const distIndex = path.join(projectDir, "dist", "index.js");
 
   let settings: any = {};
@@ -162,8 +175,34 @@ function registerWithClaudeCode(): void {
   console.log(`  Registered "multi-google" in ${CLAUDE_SETTINGS_PATH}\n`);
 }
 
+function projectRoot(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+async function reauthAccount(label: string): Promise<void> {
+  const config = loadConfig();
+  if (!config.clientId || !config.clientSecret) {
+    console.error("  No OAuth credentials found. Run `npm run setup` first.");
+    process.exit(1);
+  }
+  const verb = config.accounts[label] ? "Re-authorizing" : "Connecting";
+  console.log(`\n  ${verb} account "${label}" with the current scope list...`);
+  if (process.argv.includes("--dry-run")) {
+    console.log("  --dry-run: stopping before the browser sign-in.\n");
+    return;
+  }
+  await runOAuthFlow(label);
+  console.log(`\n  Account "${label}" authorized. Restart the MCP server (restart Claude Code) to use it.\n`);
+}
+
 async function main() {
   const isAddOnly = process.argv.includes("--add-account");
+  const label = isAddOnly ? accountFromArgs(process.argv) : undefined;
+  if (label) {
+    await reauthAccount(label);
+    rl.close();
+    return;
+  }
 
   if (!isAddOnly) {
     printBanner();
@@ -192,10 +231,7 @@ async function main() {
     // Step 3: Build TypeScript
     console.log("  Building TypeScript...\n");
     const { execSync } = await import("child_process");
-    const projectDir = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
-      ".."
-    );
+    const projectDir = projectRoot();
     execSync("npm run build", { cwd: projectDir, stdio: "inherit" });
     console.log("");
 
@@ -215,10 +251,7 @@ async function main() {
   } else {
     // Rebuild so tool descriptions update with new account names
     const { execSync } = await import("child_process");
-    const projectDir = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
-      ".."
-    );
+    const projectDir = projectRoot();
     execSync("npm run build", { cwd: projectDir, stdio: "inherit" });
     console.log("\n  Done! Restart Claude Code to pick up the new account.\n");
   }

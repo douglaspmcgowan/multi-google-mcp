@@ -51,6 +51,15 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/drive",
+  // Google Chat (user auth). Tokens granted before these were added lack them;
+  // the Chat tools then refuse with a re-auth command (src/scopes.ts).
+  "https://www.googleapis.com/auth/chat.spaces",
+  "https://www.googleapis.com/auth/chat.messages",
+  "https://www.googleapis.com/auth/chat.memberships",
+  // Google Forms. The drive scope already satisfies forms.create and
+  // forms.responses.list; these are requested so a re-authorized token names them.
+  "https://www.googleapis.com/auth/forms.body",
+  "https://www.googleapis.com/auth/forms.responses.readonly",
 ];
 
 export const REDIRECT_URI = "http://localhost:3847/callback";

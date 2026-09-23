@@ -29,8 +29,28 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `docs_list_tabs` — tabId, title, index, nesting and end index per tab
 - `docs_add_tab`, `docs_rename_tab`, `docs_delete_tab` — tab management (delete requires `confirm_title`)
 - `docs_write_tab` — replace one tab's body from structured paragraphs (style, bullet/numbered, level); indices computed for you
+- `docs_write_markdown` — markdown to real formatting (headings, nested bullets, numbered, bold, italic, code, links); replace a tab (`document_id` + `tab_id`) or create a new Doc (`title`, optional `parent_id`)
+- `docs_append_to_tab` — append markdown or paragraphs to the end of a tab without touching existing content; optional `heading` and `date_prefix`
+- `docs_read_markdown` — a doc or one tab back as compact markdown
+- `docs_heading_link` — deep link to a heading (`?tab=<tabId>#heading=h.xxx`), by heading text or id; no match argument lists every heading
 - `docs_replace_text` — find/replace, all tabs or one `tab_id`
 - `docs_batch_update` — raw Docs API requests; `tab_id` is injected into every location/range lacking one
+
+**Comments** (any Drive file; Drive API comments/replies)
+- `docs_list_comments` — comments with replies; `include_resolved` for resolved ones
+- `docs_add_comment` — unanchored, or with `quoted_text`/`anchor` (Docs/Sheets/Slides display API comments as unanchored — a Google limitation)
+- `docs_reply_comment`, `docs_resolve_comment` (`reopen: true` to reopen)
+
+**Drive additions**
+- `drive_share` — `email` for one or `emails` for many; per-email `{email, ok, permissionId | error}`; `notify`, `message`
+- `drive_list_recent` — files in a folder changed since a date, newest first; `recursive` walks subfolders
+
+**Google Chat** (needs the chat scopes and a configured Chat app — see below)
+- `chat_list_spaces`, `chat_post_message` (optional thread), `chat_list_members`, `chat_add_members` (`email` or `emails`)
+
+**Google Forms** (needs the Forms API enabled)
+- `forms_create` — form plus questions (short_text, paragraph, multiple_choice, checkboxes, dropdown, scale, date, time); published unless `publish: false`
+- `forms_list_responses` — answers keyed by question title; optional `since`
 
 **Utility**
 - `google_list_accounts` — list all connected accounts
@@ -73,7 +93,7 @@ You only need to do this once, even if you're connecting multiple accounts. It t
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com/)
 2. **Create a new project:** click the project dropdown at the top → "New Project" → name it "Claude MCP" → Create
-3. **Enable the APIs:** go to **APIs & Services → Library**, search for **Gmail API**, click it, click Enable. Repeat for **Google Calendar API**.
+3. **Enable the APIs:** go to **APIs & Services → Library**, search for **Gmail API**, click it, click Enable. Repeat for **Google Calendar API**, **Google Drive API**, **Google Docs API**, **Google Slides API**, **Google Sheets API**, **Google Forms API** and **Google Chat API** (Chat also needs its Configuration page filled in).
 4. **Configure the consent screen:** go to **APIs & Services → OAuth consent screen** → External → Create. Fill in:
    - App name: "Claude MCP" (or whatever)
    - User support email: your email
@@ -141,7 +161,16 @@ You're trying to sign in with a Google account that isn't added as a test user. 
 Something else is using the port the OAuth flow needs. Find it with `lsof -i :3847` and close it, then try again.
 
 **"Authentication expired for account X"**
-Your tokens expired or were revoked. Run `npm run add-account` and use the same label to re-authenticate.
+Your tokens expired or were revoked. Re-authenticate that label (see below).
+
+**"Re-auth needed: account X was authorized before scope Y was added"**
+The Chat tools need scopes added on 2026-09-23, and tokens granted earlier do not carry them. Re-authorize the account (PowerShell, from any directory):
+
+```powershell
+cd "$env:USERPROFILE\multi-google-mcp"; npm run add-account -- --account berkeley
+```
+
+Replace `berkeley` with the label (`personal`, `bhouse`, `berkeley`, `pyrgos`). It skips the prompts, opens the Google sign-in, overwrites that account's token with one carrying the current `SCOPES`, and leaves the other accounts alone. Restart Claude Code afterwards. Chat also requires, in the Cloud project: **Google Chat API** enabled and its **Configuration** page filled in (app name, avatar URL, description) — Google requires a configured Chat app even for user-authenticated calls. Forms requires the **Google Forms API** enabled; its tools already work with the existing `drive` scope, so they need no re-auth.
 
 **Tools don't show up in Claude Code**
 Make sure you restarted Claude Code after setup. You can verify the server is registered by checking `~/.claude/settings.json` — you should see a `multi-google` entry under `mcpServers`.
@@ -165,5 +194,5 @@ Don't publish your Google Cloud project to production — keep it in "Testing" m
 
 - Your OAuth tokens are stored locally in `~/.config/multi-google-mcp/config.json`. Don't commit this file or share it.
 - The server runs locally and only communicates with Google's APIs. No third-party services are involved.
-- The scopes requested are: Gmail modify/compose/labels, and Calendar read/write. If you want to reduce these, edit `SCOPES` in `src/config.ts` and re-run setup.
+- The scopes requested are: Gmail modify/compose/labels, Calendar read/write, Drive, Chat (`chat.spaces`, `chat.messages`, `chat.memberships`) and Forms (`forms.body`, `forms.responses.readonly`). If you want to reduce these, edit `SCOPES` in `src/config.ts` and re-run setup. A tool whose scope a stored token lacks refuses with the re-auth command rather than calling Google.
 - Revoke access any time at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).

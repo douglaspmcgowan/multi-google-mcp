@@ -101,6 +101,103 @@ export function createDriveTools(
       },
     },
     {
+      name: "drive_list_recent",
+      description:
+        "List files in a Drive folder changed since a date, newest first: id, name, mimeType, " +
+        "modifiedTime, lastModifyingUser, webViewLink and path (the subfolder chain below the " +
+        "given folder). recursive=true walks subfolders (up to max_folders). since takes a date " +
+        `(YYYY-MM-DD, read as UTC midnight) or an ISO timestamp. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          folder_id: { type: "string", description: "Folder ID" },
+          since: { type: "string", description: "Only files modified after this date/time" },
+          recursive: { type: "boolean", description: "Include subfolders (default false)" },
+          include_folders: { type: "boolean", description: "Also list changed folders themselves (default false)" },
+          max_results: { type: "number", description: "Maximum files to return (default 100)" },
+          max_folders: { type: "number", description: "Recursion cap on folders visited (default 200)" },
+        },
+        required: ["account", "folder_id", "since"],
+      },
+      handler: async (args: {
+        account: string;
+        folder_id: string;
+        since: string;
+        recursive?: boolean;
+        include_folders?: boolean;
+        max_results?: number;
+        max_folders?: number;
+      }) => {
+        const parsed = new Date(args.since);
+        if (Number.isNaN(parsed.getTime())) throw new Error(`since is not a date: ${args.since}`);
+        const since = parsed.toISOString();
+        const maxResults = args.max_results ?? 100;
+        const maxFolders = args.max_folders ?? 200;
+        const drive = await getClient(args.account);
+        const listAll = async (q: string, fields: string) => {
+          const out: drive_v3.Schema$File[] = [];
+          let pageToken: string | undefined;
+          do {
+            const res = await drive.files.list({
+              q,
+              pageSize: 1000,
+              pageToken,
+              fields: `nextPageToken,files(${fields})`,
+              supportsAllDrives: true,
+              includeItemsFromAllDrives: true,
+            } as never);
+            const data = res.data as drive_v3.Schema$FileList;
+            out.push(...(data.files ?? []));
+            pageToken = data.nextPageToken ?? undefined;
+          } while (pageToken);
+          return out;
+        };
+        const quote = (value: string) => value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+        const recentFields = "id,name,mimeType,modifiedTime,lastModifyingUser(displayName,emailAddress),webViewLink,parents";
+        const queue: Array<{ id: string; path: string }> = [{ id: args.folder_id, path: "" }];
+        const visited = new Set<string>();
+        const files: Array<Record<string, unknown>> = [];
+        let truncatedFolders = false;
+        while (queue.length) {
+          const folder = queue.shift()!;
+          if (visited.has(folder.id)) continue;
+          if (visited.size >= maxFolders) {
+            truncatedFolders = true;
+            break;
+          }
+          visited.add(folder.id);
+          const changed = await listAll(
+            `'${quote(folder.id)}' in parents and trashed = false and modifiedTime > '${since}'`,
+            recentFields
+          );
+          for (const file of changed) {
+            if (file.mimeType === NATIVE_TYPES.folder && !args.include_folders) continue;
+            files.push({ ...file, path: folder.path });
+          }
+          if (args.recursive) {
+            const subfolders = await listAll(
+              `'${quote(folder.id)}' in parents and trashed = false and mimeType = '${NATIVE_TYPES.folder}'`,
+              "id,name"
+            );
+            for (const sub of subfolders) {
+              if (sub.id) queue.push({ id: sub.id, path: folder.path ? `${folder.path}/${sub.name}` : sub.name ?? "" });
+            }
+          }
+        }
+        files.sort((a, b) => String(b.modifiedTime ?? "").localeCompare(String(a.modifiedTime ?? "")));
+        return asText({
+          folderId: args.folder_id,
+          since,
+          foldersVisited: visited.size,
+          truncatedFolders,
+          count: Math.min(files.length, maxResults),
+          totalMatched: files.length,
+          files: files.slice(0, maxResults),
+        });
+      },
+    },
+    {
       name: "drive_get_metadata",
       description: `Get metadata for a Drive file. ${accountDescription(getAccounts)}`,
       inputSchema: {
@@ -187,37 +284,70 @@ export function createDriveTools(
     },
     {
       name: "drive_share",
-      description: `Share a Drive file with a user. ${accountDescription(getAccounts)}`,
+      description:
+        "Share a Drive file or folder with one user (email) or many (emails) in one call, all " +
+        "with the same role. Each address is shared independently: with emails the result lists " +
+        "{email, ok, permissionId | error} per address, so one bad address does not stop the " +
+        `rest. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
         properties: {
           account,
           file_id: fileId,
-          email: { type: "string", description: "Recipient email address" },
+          email: { type: "string", description: "Recipient email address (single)" },
+          emails: { type: "array", description: "Recipient email addresses (batch)", items: { type: "string" } },
           role: { type: "string", description: "Permission role (reader, commenter, or writer)" },
           notify: { type: "boolean", description: "Send Google's notification email (default true)" },
+          message: { type: "string", description: "Optional message included in the notification email" },
         },
-        required: ["account", "file_id", "email", "role"],
+        required: ["account", "file_id", "role"],
       },
       handler: async (args: {
         account: string;
         file_id: string;
-        email: string;
+        email?: string;
+        emails?: string[];
         role: string;
         notify?: boolean;
+        message?: string;
       }) => {
+        const roles = ["reader", "commenter", "writer"];
+        if (!roles.includes(args.role)) throw new Error(`role must be one of ${roles.join(", ")}`);
+        const list = [...(args.email ? [args.email] : []), ...(args.emails ?? [])]
+          .map((e) => e.trim())
+          .filter(Boolean);
+        const seen = new Set<string>();
+        const unique = list.filter((e) => !seen.has(e.toLowerCase()) && seen.add(e.toLowerCase()));
+        if (!unique.length) throw new Error("pass email or emails");
         const drive = await getClient(args.account);
-        const res = await drive.permissions.create({
-          fileId: args.file_id,
-          sendNotificationEmail: args.notify !== false,
-          requestBody: { type: "user", role: args.role, emailAddress: args.email },
-          fields: "id",
-        });
+        const notify = args.notify !== false;
+        const results: Array<{ email: string; ok: boolean; permissionId?: string; error?: string }> = [];
+        for (const email of unique) {
+          try {
+            const res = await drive.permissions.create({
+              fileId: args.file_id,
+              sendNotificationEmail: notify,
+              ...(notify && args.message ? { emailMessage: args.message } : {}),
+              requestBody: { type: "user", role: args.role, emailAddress: email },
+              fields: "id",
+              supportsAllDrives: true,
+            } as never);
+            results.push({ email, ok: true, permissionId: (res.data as { id?: string }).id ?? undefined });
+          } catch (error) {
+            results.push({ email, ok: false, error: (error as Error)?.message ?? String(error) });
+          }
+        }
+        if (!args.emails) {
+          if (!results[0].ok) throw new Error(results[0].error);
+          return asText({ fileId: args.file_id, email: unique[0], role: args.role, permissionId: results[0].permissionId });
+        }
         return asText({
           fileId: args.file_id,
-          email: args.email,
           role: args.role,
-          permissionId: res.data.id,
+          notify,
+          shared: results.filter((r) => r.ok).length,
+          failed: results.filter((r) => !r.ok).length,
+          results,
         });
       },
     },

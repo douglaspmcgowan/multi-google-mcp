@@ -104,6 +104,7 @@ test("shares a file with a requested email and role", async () => {
     sendNotificationEmail: true,
     requestBody: { type: "user", role: "writer", emailAddress: "person@example.com" },
     fields: "id",
+    supportsAllDrives: true,
   });
   assert.deepEqual(result, {
     fileId: "file-1",
