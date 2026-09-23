@@ -8,7 +8,7 @@ Claude Code's built-in Google integrations only connect one account at a time. T
 
 ## What You Get
 
-Eleven tools, all of which take an `account` parameter so Claude knows which Google account to use:
+Every tool takes an `account` parameter so Claude knows which Google account to use. Drive, Slides and Sheets tools are also registered; see `src/tools/`.
 
 **Gmail**
 - `gmail_search` — search emails using Gmail query syntax
@@ -23,6 +23,14 @@ Eleven tools, all of which take an `account` parameter so Claude knows which Goo
 - `calendar_update_event` — update an existing event
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
+
+**Docs** (tab-aware: every tab has its own index space, and a request without a tabId edits the first tab)
+- `docs_get_structure` — every tab's paragraphs with index ranges, styles and list nesting; `tab_id` for one tab
+- `docs_list_tabs` — tabId, title, index, nesting and end index per tab
+- `docs_add_tab`, `docs_rename_tab`, `docs_delete_tab` — tab management (delete requires `confirm_title`)
+- `docs_write_tab` — replace one tab's body from structured paragraphs (style, bullet/numbered, level); indices computed for you
+- `docs_replace_text` — find/replace, all tabs or one `tab_id`
+- `docs_batch_update` — raw Docs API requests; `tab_id` is injected into every location/range lacking one
 
 **Utility**
 - `google_list_accounts` — list all connected accounts
