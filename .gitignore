@@ -1,3 +1,68 @@
+# agent-harness:project-gitignore:v1:start
+# Managed block. Its source is .agents/templates/gitignore in the harness repository; edit it
+# there and re-run EnsureProject. Anything you add outside these markers is preserved.
+
+# Task-hook runtime state. hook-state.js writes <repo-root>/taskstate/<project-id>/ by its own
+# design -- session-local records, allow-tag usage among them -- which belong to one device and
+# one session rather than to the project. It was never ignored, so every project running the
+# hooks accumulated an untracked directory in its root that a `git add -A` would commit.
+taskstate/
+
+# The pre-relocation location for the same state. A session that predates the move still writes
+# here, so a project can acquire this directory without any current tool creating it.
+.claude/state/
+
+# The codex dispatch marker. auto-schedule-codex-poll.js writes it into <repo-root>/.claude/ on
+# PostToolUse for a codex subagent, and its own body tells the session to delete it once the
+# wakeup is scheduled -- so a session that ends before that leaves it behind. Named rather than
+# ignoring `.claude/`, which is a real product configuration directory a project may track.
+.claude/codex-dispatch-pending.json
+
+# Linked worktrees kept inside the repository. A worktree's own files are tracked by ITS checkout,
+# never by this one, so an unignored .worktrees/ shows as untracked here and a `git add -A` would
+# commit a second copy of the tree. The convention is one place per repository: agent worktrees go
+# in .worktrees/<task>, product-managed ones stay wherever their product puts them. On 2026-08-14
+# nine agent-harness worktrees were spread across four roots, two of them siblings of the project
+# in Projects\, where they read as separate projects.
+.worktrees/
+
+# Work Scope transaction scratch. State and evidence writes go to a temp file beside the target and
+# are renamed into place, so a write killed mid-transaction -- a hook timeout, an interrupted
+# session, a closed laptop -- leaves the temp behind. Nothing sweeps them: `Reconcile-WorkState
+# -Repair` reports the state valid and drift-free while the leftovers stay on disk. Measured
+# 2026-08-15 in this repository: six of them untracked, which a `git add -A` would have committed.
+.agents/work/tmp/
+.agents/work/**/*.tmp
+
+# Compiled-assembly cache for WorkScope.psm1's two C# blocks. The module used to re-run the C#
+# compiler on every import -- 742 ms of a ~900 ms import, measured 2026-08-15 under pwsh 7.6.4,
+# paid by every process the task hooks start. It now compiles once to a DLL beside itself, keyed
+# by a hash of the source and the runtime version. Build output, never source: it is rebuilt on
+# demand, differs per machine and per pwsh version, and a committed copy would be loaded as code
+# on someone else's machine.
+.agents/tools/.assembly-cache/
+
+# Work Scope's own authoritative runtime files -- the hash-chained event log, the state it
+# describes, its schema, and the evidence and handoff directories a closed task's receipts live
+# in. A project's OWN earlier or broader pattern (a catch-all `*.jsonl`, `*.json`, or similar) can
+# still swallow these from every commit with nothing reporting it: measured on mission-control,
+# whose `*.jsonl` rule excluded .agents/work/events.jsonl from history entirely, so the chain that
+# authenticates state.json was never committed. THIS NEGATION IS NOT A RELIABLE FIX BY ITSELF: git
+# applies the LAST matching .gitignore line, so a project rule that appears anywhere BELOW this
+# managed block (the common case -- Set-MarkedBlock keeps or writes this block near the top) still
+# wins over the negation below and re-excludes the path. Confirmed by hand: placing this exact
+# negation at the end of this block did not stop `git check-ignore -v` from reporting
+# mission-control's later `*.jsonl` rule as the winner. Keep this as defense-in-depth for the
+# projects where no later rule conflicts, but Test-WorkScopeSchemaProjection.ps1's gitignore-exposure
+# check is the safeguard that actually catches the swallowed case, by running real `git
+# check-ignore` per enrolled project rather than trusting pattern order in the abstract.
+!.agents/work/events.jsonl
+!.agents/work/state.json
+!.agents/work/schema.json
+!.agents/work/evidence/
+!.agents/handoffs/
+# agent-harness:project-gitignore:v1:end
+
 node_modules/
 dist/
 .DS_Store

@@ -50,6 +50,7 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/gmail.labels",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/drive",
 ];
 
 export const REDIRECT_URI = "http://localhost:3847/callback";

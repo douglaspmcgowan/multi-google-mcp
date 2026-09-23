@@ -1,0 +1,35 @@
+# agent-harness:project-gitattributes:v1:start
+# Managed block. Third-party skills are referenced here, never edited, so their
+# upstream whitespace must not fail this project's own `git diff --check`. Derived
+# from each skill's `provenance: external:` frontmatter; add project rules outside
+# the markers.
+.agents/skills/brainstorming/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/brandkit/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/dispatching-parallel-agents/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/executing-plans/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/finishing-a-development-branch/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/frontend-slides/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/full-output-enforcement/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/gpt-taste/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/html-slides/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/hue/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/image-to-code/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/imagegen-frontend-mobile/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/imagegen-frontend-web/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/impeccable/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/industrial-brutalist-ui/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/minimalist-ui/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/receiving-code-review/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/requesting-code-review/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/stitch-design-taste/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/subagent-driven-development/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/systematic-debugging/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/tech-debt-audit/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/test-driven-development/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/using-git-worktrees/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/using-superpowers/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/verification-before-completion/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/wayfinder/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/writing-plans/** whitespace=-blank-at-eol,-blank-at-eof
+.agents/skills/writing-skills/** whitespace=-blank-at-eol,-blank-at-eof
+# agent-harness:project-gitattributes:v1:end

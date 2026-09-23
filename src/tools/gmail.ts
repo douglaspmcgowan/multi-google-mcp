@@ -1,10 +1,10 @@
-import { google } from "googleapis";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
-function getGmail(account: string) {
+async function getGmail(account: string) {
+  const { gmail } = await import("@googleapis/gmail");
   const auth = getAuthenticatedClient(account);
-  return google.gmail({ version: "v1", auth });
+  return gmail({ version: "v1", auth: auth as never });
 }
 
 function accountDescription() {
@@ -27,7 +27,7 @@ export const gmailTools = [
       required: ["account", "query"],
     },
     handler: async (args: { account: string; query: string; max_results?: number }) => {
-      const gmail = getGmail(args.account);
+      const gmail = await getGmail(args.account);
       const res = await gmail.users.messages.list({
         userId: "me",
         q: args.query,
@@ -74,7 +74,7 @@ export const gmailTools = [
       required: ["account", "message_id"],
     },
     handler: async (args: { account: string; message_id: string }) => {
-      const gmail = getGmail(args.account);
+      const gmail = await getGmail(args.account);
       const res = await gmail.users.messages.get({
         userId: "me",
         id: args.message_id,
@@ -133,7 +133,7 @@ export const gmailTools = [
       required: ["account", "to", "subject", "body"],
     },
     handler: async (args: { account: string; to: string; subject: string; body: string; cc?: string; bcc?: string }) => {
-      const gmail = getGmail(args.account);
+      const gmail = await getGmail(args.account);
 
       let headers = `To: ${args.to}\nSubject: ${args.subject}\nContent-Type: text/plain; charset=utf-8\n`;
       if (args.cc) headers += `Cc: ${args.cc}\n`;
@@ -165,7 +165,7 @@ export const gmailTools = [
       required: ["account", "to", "subject", "body"],
     },
     handler: async (args: { account: string; to: string; subject: string; body: string }) => {
-      const gmail = getGmail(args.account);
+      const gmail = await getGmail(args.account);
 
       const raw = Buffer.from(
         `To: ${args.to}\nSubject: ${args.subject}\nContent-Type: text/plain; charset=utf-8\n\n${args.body}`
@@ -192,7 +192,7 @@ export const gmailTools = [
       required: ["account"],
     },
     handler: async (args: { account: string }) => {
-      const gmail = getGmail(args.account);
+      const gmail = await getGmail(args.account);
       const res = await gmail.users.labels.list({ userId: "me" });
       const labels = (res.data.labels || []).map((l) => ({ id: l.id, name: l.name, type: l.type }));
       return { content: [{ type: "text" as const, text: JSON.stringify(labels, null, 2) }] };
