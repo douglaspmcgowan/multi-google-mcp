@@ -39,6 +39,7 @@ const NATIVE_TYPES: Record<string, string> = {
   slides: "application/vnd.google-apps.presentation",
   presentation: "application/vnd.google-apps.presentation",
   folder: "application/vnd.google-apps.folder",
+  shortcut: "application/vnd.google-apps.shortcut",
 };
 
 export function resolveMimeType(value: string | undefined): string | undefined {
@@ -377,7 +378,8 @@ export function createDriveTools(
         "Create a Drive file or folder. `mime_type` accepts the shorthands doc, sheet, slides and " +
         "folder, or any explicit mime type. Pass `html` to get a formatted Google Doc — headings, " +
         "bold, links and tables all survive the conversion — or `text` for plain content. Omit both " +
-        `for an empty file. ${accountDescription(getAccounts)}`,
+        "for an empty file. Pass `shortcut_target_id` to create a Drive shortcut to that file or " +
+        `folder instead (no body allowed). ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
         properties: {
@@ -389,6 +391,10 @@ export function createDriveTools(
           text: { type: "string", description: "Plain-text body; ignored when html is given" },
           content_mime_type: { type: "string", description: "How to read the body (default text/html for html, text/plain for text)" },
           description: { type: "string", description: "File description" },
+          shortcut_target_id: {
+            type: "string",
+            description: "Create a shortcut pointing at this file or folder ID; sets mime type to shortcut",
+          },
         },
         required: ["account", "name"],
       },
@@ -401,18 +407,33 @@ export function createDriveTools(
         text?: string;
         content_mime_type?: string;
         description?: string;
+        shortcut_target_id?: string;
       }) => {
-        const drive = await getClient(args.account);
-        const targetType = resolveMimeType(args.mime_type) || NATIVE_TYPES.doc;
+        const requestedType = resolveMimeType(args.mime_type);
         const body = bodyFor(args.html, args.text);
+        const isShortcut = Boolean(args.shortcut_target_id) || requestedType === NATIVE_TYPES.shortcut;
+        if (isShortcut) {
+          if (!args.shortcut_target_id) {
+            throw new Error("drive_create: a shortcut needs shortcut_target_id");
+          }
+          if (requestedType && requestedType !== NATIVE_TYPES.shortcut) {
+            throw new Error(`drive_create: shortcut_target_id conflicts with mime_type ${args.mime_type}`);
+          }
+          if (body !== undefined) {
+            throw new Error("drive_create: a shortcut cannot carry html or text");
+          }
+        }
+        const drive = await getClient(args.account);
+        const targetType = isShortcut ? NATIVE_TYPES.shortcut : requestedType || NATIVE_TYPES.doc;
         const request: Record<string, unknown> = {
           requestBody: {
             name: args.name,
             mimeType: targetType,
+            ...(isShortcut ? { shortcutDetails: { targetId: args.shortcut_target_id } } : {}),
             ...(args.parent_id ? { parents: [args.parent_id] } : {}),
             ...(args.description ? { description: args.description } : {}),
           },
-          fields: fileFields,
+          fields: isShortcut ? `${fileFields},shortcutDetails` : fileFields,
           supportsAllDrives: true,
         };
         if (body !== undefined) {

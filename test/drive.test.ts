@@ -168,6 +168,44 @@ test("creates a folder from the shorthand and carries no body", async () => {
   assert.equal(record[0].request.media, undefined);
 });
 
+test("creates a shortcut pointing at a target file", async () => {
+  const record: Array<{ method: string; request: any }> = [];
+  const tools = createDriveTools(writeClient(record) as never, () => []);
+
+  await handler(tools, "drive_create")({
+    account: "berkeley",
+    name: "Report (shortcut)",
+    parent_id: "folder-1",
+    shortcut_target_id: "target-1",
+  });
+
+  const request = record[0].request;
+  assert.equal(request.requestBody.mimeType, "application/vnd.google-apps.shortcut");
+  assert.deepEqual(request.requestBody.shortcutDetails, { targetId: "target-1" });
+  assert.deepEqual(request.requestBody.parents, ["folder-1"]);
+  assert.equal(request.media, undefined);
+  assert.match(request.fields, /shortcutDetails/);
+});
+
+test("refuses a shortcut without a target or with a body", async () => {
+  const record: Array<{ method: string; request: any }> = [];
+  const tools = createDriveTools(writeClient(record) as never, () => []);
+
+  await assert.rejects(
+    () => handler(tools, "drive_create")({ account: "berkeley", name: "S", mime_type: "shortcut" }),
+    /shortcut_target_id/
+  );
+  await assert.rejects(
+    () => handler(tools, "drive_create")({ account: "berkeley", name: "S", shortcut_target_id: "t", html: "<p>x</p>" }),
+    /cannot carry/
+  );
+  await assert.rejects(
+    () => handler(tools, "drive_create")({ account: "berkeley", name: "S", shortcut_target_id: "t", mime_type: "doc" }),
+    /conflicts/
+  );
+  assert.equal(record.length, 0);
+});
+
 test("replaces a Doc's contents and refuses an empty body", async () => {
   const record: Array<{ method: string; request: any }> = [];
   const tools = createDriveTools(writeClient(record) as never, () => []);
