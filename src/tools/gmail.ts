@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
 
@@ -207,6 +209,57 @@ export const gmailTools = [
       };
 
       return { content: [{ type: "text" as const, text: JSON.stringify(email, null, 2) }] };
+    },
+  },
+  {
+    name: "gmail_download_attachment",
+    description:
+      "Download one attachment of a Gmail message to disk. Get message_id and attachment_id from " +
+      `gmail_read, which lists each attachment's filename, mimeType, size, and attachmentId. ${accountDescription()}`,
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        account: { type: "string", description: "Account label" },
+        message_id: { type: "string", description: "Gmail message ID" },
+        attachment_id: { type: "string", description: "Attachment ID from gmail_read" },
+        destination_path: {
+          type: "string",
+          description: "Destination path on disk; when it is an existing directory, filename is written inside it",
+        },
+        filename: {
+          type: "string",
+          description: "File name to use when destination_path is a directory",
+        },
+      },
+      required: ["account", "message_id", "attachment_id", "destination_path"],
+    },
+    handler: async (args: {
+      account: string;
+      message_id: string;
+      attachment_id: string;
+      destination_path: string;
+      filename?: string;
+    }) => {
+      const gmail = await getGmail(args.account);
+      const res = await gmail.users.messages.attachments.get({
+        userId: "me",
+        messageId: args.message_id,
+        id: args.attachment_id,
+      });
+      if (!res.data.data) throw new Error("Attachment returned no data");
+
+      const isDirectory = fs.existsSync(args.destination_path) && fs.statSync(args.destination_path).isDirectory();
+      const destination = isDirectory
+        ? path.join(args.destination_path, args.filename ?? args.attachment_id)
+        : args.destination_path;
+
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.writeFileSync(destination, Buffer.from(res.data.data, "base64url"));
+      const byteCount = fs.statSync(destination).size;
+
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ path: destination, byteCount }, null, 2) }],
+      };
     },
   },
   {
