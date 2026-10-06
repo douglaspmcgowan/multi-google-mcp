@@ -87,7 +87,7 @@ test("read-only mode: env 1/true or config readOnly true", () => {
 });
 
 test("READ_ONLY_SCOPES holds only read scopes; SCOPES carries the forward-looking grants", () => {
-  assert.equal(READ_ONLY_SCOPES.length, 8);
+  assert.equal(READ_ONLY_SCOPES.length, 10);
   for (const s of READ_ONLY_SCOPES) assert.match(shortScopeName(s), /readonly$/);
   const names = SCOPES.map(shortScopeName);
   for (const n of ["contacts", "gmail.settings.basic", "meetings.space.created"]) assert.ok(names.includes(n), n);
@@ -96,6 +96,7 @@ test("READ_ONLY_SCOPES holds only read scopes; SCOPES carries the forward-lookin
     [
       "gmail.readonly", "calendar.readonly", "drive.readonly", "tasks.readonly",
       "contacts.readonly", "contacts.other.readonly", "forms.body.readonly", "forms.responses.readonly",
+      "meetings.space.readonly", "directory.readonly",
     ]
   );
 });

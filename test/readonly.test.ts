@@ -57,6 +57,8 @@ const EXPECTED_WRITES = [
   "sheets_clear_range", "sheets_create", "sheets_add_tab", "sheets_rename_tab", "sheets_delete_tab",
   "slides_save_thumbnail", "slides_delete_slide", "slides_duplicate_slide", "slides_reorder_slides",
   "slides_insert_image", "slides_set_speaker_notes", "docs_reopen_comment", "docs_delete_comment",
+  "chat_pin_message", "chat_unpin_message", "chat_delete_space", "chat_mark_space_read", "chat_set_notification_setting",
+  "gmail_update_imap", "gmail_update_pop", "gmail_update_language",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {

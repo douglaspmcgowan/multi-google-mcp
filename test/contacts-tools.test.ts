@@ -40,6 +40,8 @@ test("every new contacts tool is registered with the right readOnly flag", () =>
   const flags = Object.fromEntries(tools.map((t) => [t.name, t.readOnly]));
   assert.deepEqual(flags, {
     contacts_search: true,
+    contacts_search_directory: true,
+    contacts_list_directory: true,
     contacts_list: true,
     contacts_get: true,
     contacts_create: false,

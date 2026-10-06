@@ -81,4 +81,10 @@ export const SCOPE = {
   chatMessagesCreate: `${PREFIX}chat.messages.create`,
   chatMemberships: `${PREFIX}chat.memberships`,
   chatMembershipsReadonly: `${PREFIX}chat.memberships.readonly`,
+  chatDelete: `${PREFIX}chat.delete`,
+  chatReadState: `${PREFIX}chat.users.readstate`,
+  chatReadStateReadonly: `${PREFIX}chat.users.readstate.readonly`,
+  chatSpaceSettings: `${PREFIX}chat.users.spacesettings`,
+  meetingsSpaceReadonly: `${PREFIX}meetings.space.readonly`,
+  directoryReadonly: `${PREFIX}directory.readonly`,
 } as const;

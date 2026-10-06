@@ -55,6 +55,9 @@ test("every new tool is registered with an explicit readOnly flag and the right 
     gmail_get_vacation: true, gmail_set_vacation: false,
     gmail_list_send_as: true, gmail_update_signature: false,
     gmail_get_profile: true, gmail_list_history: true,
+    gmail_list_forwarding_addresses: true, gmail_get_forwarding_address: true, gmail_get_auto_forwarding: true,
+    gmail_get_imap: true, gmail_update_imap: false, gmail_get_pop: true, gmail_update_pop: false,
+    gmail_get_language: true, gmail_update_language: false,
   });
   for (const n of ["gmail_send_draft", "gmail_create_filter", "gmail_set_vacation", "gmail_update_signature"]) {
     assert.match(tools.find((t) => t.name === n)!.description, /SENDS|STANDING|ON it|appended/);

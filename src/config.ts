@@ -99,6 +99,16 @@ export const SCOPES = [
   `${A}contacts`,
   `${A}gmail.settings.basic`,
   `${A}meetings.space.created`,
+  // Chat extras: delete a space (chat.delete is a RESTRICTED scope), read/mark-read
+  // state, and per-space notification settings. Pins need no new scope (chat.spaces covers them).
+  `${A}chat.delete`,
+  `${A}chat.users.readstate`,
+  `${A}chat.users.spacesettings`,
+  // Meet conference records, participants, recordings and transcripts for every
+  // meeting the user attended or organized, not only spaces this app created.
+  `${A}meetings.space.readonly`,
+  // Workspace domain directory (Workspace accounts only).
+  `${A}directory.readonly`,
 ];
 
 /**
@@ -114,6 +124,8 @@ export const READ_ONLY_SCOPES = [
   `${A}contacts.other.readonly`,
   `${A}forms.body.readonly`,
   `${A}forms.responses.readonly`,
+  `${A}meetings.space.readonly`,
+  `${A}directory.readonly`,
 ];
 
 /** "https://www.googleapis.com/auth/gmail.readonly" -> "gmail.readonly". */

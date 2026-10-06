@@ -27,7 +27,8 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_trash`, `gmail_untrash` — move messages or threads to Trash and back (recoverable; there is still no permanent delete)
 - `gmail_send_draft` — send an existing draft immediately
 - `gmail_create_label`, `gmail_update_label`, `gmail_delete_label` — manage labels (name, visibility, colour)
-- `gmail_list_filters`, `gmail_create_filter`, `gmail_delete_filter` — standing filters (`gmail.settings.basic`; no forwarding)
+- `gmail_list_filters`, `gmail_create_filter`, `gmail_delete_filter` — standing filters (`gmail.settings.basic`; `forward` only to an already-verified forwarding address)
+- `gmail_list_forwarding_addresses`, `gmail_get_forwarding_address`, `gmail_get_auto_forwarding`, `gmail_get_imap`, `gmail_update_imap`, `gmail_get_pop`, `gmail_update_pop`, `gmail_get_language`, `gmail_update_language` — forwarding (read-only; Google restricts adding addresses, auto-forwarding changes and delegates to service accounts) and IMAP/POP/language settings
 - `gmail_get_vacation`, `gmail_set_vacation` — auto-reply; `gmail_list_send_as`, `gmail_update_signature` — signatures
 - `gmail_get_profile`, `gmail_list_history` — address, totals, historyId and recent mailbox changes
 - Star, mark important and batch label changes need no extra tool: use `gmail_modify_labels` with `STARRED` / `IMPORTANT` and many `message_ids`.
@@ -57,6 +58,9 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `calendar_list_colors`, `calendar_get_settings` — colour ids and account settings
 - `calendar_create_event` / `calendar_update_event` also take `recurrence`, `reminders`, `color_id`, `visibility`, `time_zone`, all-day `YYYY-MM-DD` dates and `add_meet` (new Google Meet link)
 - `meet_create_space`, `meet_get_space`, `meet_update_space`, `meet_end_active_conference` — Google Meet spaces this app created (`meetings.space.created` scope)
+- `meet_list_conference_records`, `meet_get_conference_record`, `meet_list_participants`, `meet_list_participant_sessions`, `meet_list_recordings`, `meet_list_transcripts`, `meet_list_transcript_entries` — meeting history, recordings and full transcript text (`meetings.space.readonly`)
+- `chat_list_pins`, `chat_pin_message`, `chat_unpin_message`, `chat_delete_space` (`chat.delete`, restricted), `chat_get_read_state`, `chat_mark_space_read`, `chat_get_notification_setting`, `chat_set_notification_setting`, `chat_search_messages`
+- `contacts_search_directory`, `contacts_list_directory` — Workspace domain directory (`directory.readonly`; Workspace accounts only)
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
 
