@@ -14,13 +14,14 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_search` — search emails using Gmail query syntax
 - `gmail_read` — read a specific email by ID
 - `gmail_send` — send an email
-- `gmail_draft` — create a draft
+- `gmail_draft` — create a draft; optional `cc`, `bcc`, `reply_to_message_id` (threads the draft), `forward_message_id` (forward block plus original attachments), `attachment_paths`
 - `gmail_list_labels` — list all Gmail labels
 
 **Calendar**
 - `calendar_list_events` — list upcoming events
 - `calendar_create_event` — create an event
-- `calendar_update_event` — update an existing event
+- `calendar_update_event` — update an existing event (optional `send_updates`)
+- `calendar_rsvp` — accept, decline or tentatively accept an invite (optional `send_updates`)
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
 

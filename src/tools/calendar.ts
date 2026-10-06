@@ -13,6 +13,34 @@ function accountDescription() {
   return `Available accounts: ${names.join(", ")}`;
 }
 
+export type SendUpdates = "none" | "all" | "externalOnly";
+export type RsvpResponse = "accepted" | "declined" | "tentative";
+
+/** RSVP as the authenticated account, through an injected Calendar client (seam for tests). */
+export async function rsvpToEvent(
+  cal: any,
+  args: { event_id: string; response: RsvpResponse; calendar_id?: string; send_updates?: SendUpdates }
+): Promise<{ summary: string | null | undefined; responseStatus: string | null | undefined }> {
+  if (!["accepted", "declined", "tentative"].includes(args.response)) {
+    throw new Error(`Invalid response "${args.response}". Use accepted, declined or tentative.`);
+  }
+  const calendarId = args.calendar_id || "primary";
+  const ev = await cal.events.get({ calendarId, eventId: args.event_id });
+  const attendees: any[] = ev.data.attendees || [];
+  if (!attendees.some((a) => a.self === true)) {
+    throw new Error("This account is not an attendee on the event (no attendee marked self), so it cannot RSVP.");
+  }
+  const updated = attendees.map((a) => (a.self === true ? { ...a, responseStatus: args.response } : a));
+  const res = await cal.events.patch({
+    calendarId,
+    eventId: args.event_id,
+    sendUpdates: args.send_updates || "none",
+    requestBody: { attendees: updated },
+  });
+  const me = (res.data.attendees || []).find((a: any) => a.self === true);
+  return { summary: res.data.summary ?? ev.data.summary, responseStatus: me?.responseStatus };
+}
+
 export const calendarTools = [
   {
     name: "calendar_list_events",
@@ -51,6 +79,7 @@ export const calendarTools = [
         start: e.start?.dateTime || e.start?.date,
         end: e.end?.dateTime || e.end?.date,
         location: e.location,
+        ...(e.description ? { description: e.description } : {}),
         status: e.status,
         organizer: e.organizer?.email,
         attendees: e.attendees?.map((a) => ({ email: a.email, response: a.responseStatus })),
@@ -127,12 +156,18 @@ export const calendarTools = [
         description: { type: "string", description: "New event description" },
         location: { type: "string", description: "New event location" },
         calendar_id: { type: "string", description: "Calendar ID (default: 'primary')" },
+        send_updates: {
+          type: "string",
+          enum: ["none", "all", "externalOnly"],
+          description: "Who is emailed about the change (default: 'none')",
+        },
       },
       required: ["account", "event_id"],
     },
     handler: async (args: {
       account: string;
       event_id: string;
+      send_updates?: SendUpdates;
       summary?: string;
       start?: string;
       end?: string;
@@ -151,11 +186,44 @@ export const calendarTools = [
       const res = await cal.events.patch({
         calendarId: args.calendar_id || "primary",
         eventId: args.event_id,
+        sendUpdates: args.send_updates || "none",
         requestBody: body,
       });
 
       return {
         content: [{ type: "text" as const, text: `Event updated: "${res.data.summary}"` }],
+      };
+    },
+  },
+  {
+    name: "calendar_rsvp",
+    description: `Respond to a calendar invite as this account (accepted, declined or tentative). ${accountDescription()}`,
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        account: { type: "string", description: "Account label" },
+        event_id: { type: "string", description: "Event ID to respond to" },
+        response: { type: "string", enum: ["accepted", "declined", "tentative"], description: "Your response" },
+        calendar_id: { type: "string", description: "Calendar ID (default: 'primary')" },
+        send_updates: {
+          type: "string",
+          enum: ["none", "all", "externalOnly"],
+          description: "Who is emailed about the response (default: 'none')",
+        },
+      },
+      required: ["account", "event_id", "response"],
+    },
+    handler: async (args: {
+      account: string;
+      event_id: string;
+      response: RsvpResponse;
+      calendar_id?: string;
+      send_updates?: SendUpdates;
+    }) => {
+      const cal = await getCalendar(args.account);
+      const { summary, responseStatus } = await rsvpToEvent(cal, args);
+      return {
+        content: [{ type: "text" as const, text: `RSVP recorded for "${summary}". Response status: ${responseStatus}` }],
       };
     },
   },
