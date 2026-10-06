@@ -26,10 +26,13 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_search_all` — search all (or chosen) accounts at once, grouped by account; one failing account does not fail the rest
 
 **Tasks** (Google Tasks; needs the `tasks` scope)
-- `tasks_list_lists`, `tasks_list`, `tasks_create`, `tasks_update`, `tasks_complete` (`completed: false` reopens). No delete tool.
+- `tasks_list_lists`, `tasks_list` (`show_completed`, `show_hidden`, `due_min`/`due_max`), `tasks_get`, `tasks_create` (notes, due, `parent`), `tasks_update`, `tasks_complete` (`completed: false` reopens), `tasks_move` (reorder, reparent, move between lists), `tasks_delete`, `tasks_clear_completed`
+- `tasks_create_list`, `tasks_rename_list`, `tasks_delete_list` (`tasks_delete` and `tasks_delete_list` are destructive)
 
-**Contacts** (needs `contacts.readonly` and `contacts.other.readonly`)
+**Contacts** (reads need `contacts` or `contacts.readonly`; other-contact search needs `contacts.other.readonly`; writes need `contacts`)
 - `contacts_search` — names, emails and phone numbers from saved and other contacts
+- `contacts_list`, `contacts_get`, `contacts_create`, `contacts_update` (fetches the etag), `contacts_delete` (destructive)
+- `contacts_list_groups`, `contacts_create_group`, `contacts_add_to_group`, `contacts_remove_from_group`, `contacts_copy_other_to_my_contacts` (needs `contacts` and `contacts.other.readonly`)
 
 **Calendar**
 - `calendar_freebusy` — busy intervals per account and the merged free windows across accounts (`min_minutes`, optional `working_hours`)

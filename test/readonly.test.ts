@@ -40,6 +40,9 @@ const EXPECTED_WRITES = [
   "slides_replace_text", "slides_add_from_outline", "slides_batch_update",
   "chat_post_message", "chat_add_members", "forms_create",
   "tasks_create", "tasks_update", "tasks_complete",
+  "tasks_delete", "tasks_move", "tasks_clear_completed", "tasks_create_list", "tasks_rename_list", "tasks_delete_list",
+  "contacts_create", "contacts_update", "contacts_delete", "contacts_create_group", "contacts_add_to_group",
+  "contacts_remove_from_group", "contacts_copy_other_to_my_contacts",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {
