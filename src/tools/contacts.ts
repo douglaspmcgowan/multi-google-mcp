@@ -9,6 +9,9 @@ type PeopleClient = people_v1.People;
 export const CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.readonly";
 export const OTHER_CONTACTS_SCOPE = "https://www.googleapis.com/auth/contacts.other.readonly";
 export const CONTACTS_WRITE_SCOPE = "https://www.googleapis.com/auth/contacts";
+export const DIRECTORY_SCOPE = "https://www.googleapis.com/auth/directory.readonly";
+
+const DIRECTORY_SOURCES = ["DIRECTORY_SOURCE_TYPE_DOMAIN_PROFILE", "DIRECTORY_SOURCE_TYPE_DOMAIN_CONTACT"];
 
 const READ_MASK = "names,emailAddresses,phoneNumbers";
 const FULL_MASK = "names,emailAddresses,phoneNumbers,organizations,biographies,memberships";
@@ -116,6 +119,69 @@ export function createContactsTools(
   const runRead = <T>(a: string, fn: () => Promise<T>) =>
     withScope(a, [CONTACTS_SCOPE, CONTACTS_WRITE_SCOPE], lookup, fn);
   const runWrite = <T>(a: string, fn: () => Promise<T>) => withScope(a, [CONTACTS_WRITE_SCOPE], lookup, fn);
+
+  const directoryProps = {
+    account,
+    page_size: { type: "number" as const, description: "Results per page" },
+    page_token: { type: "string" as const, description: "next_page_token from the previous call" },
+  };
+  const runDirectory = <T>(a: string, fn: () => Promise<T>) => withScope(a, [DIRECTORY_SCOPE], lookup, fn);
+  const directoryTools: ToolDef[] = [
+    {
+      name: "contacts_search_directory",
+      readOnly: true,
+      description:
+        "Search the organization's Workspace directory (colleagues' domain profiles and shared domain contacts) by name or email prefix. " +
+        "Works only for Google Workspace accounts (for example a school or company account); a personal gmail.com account returns an error or nothing. " +
+        `Needs scope directory.readonly. ${acct}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: { ...directoryProps, query: { type: "string", description: "Name or email prefix" } },
+        required: ["account", "query"],
+      },
+      handler: async (args: { account: string; query: string; page_size?: number; page_token?: string }) => {
+        if (!args.query || !args.query.trim()) throw new Error("query is required.");
+        return runDirectory(args.account, async () => {
+          const people = await getClient(args.account);
+          const res = await people.people.searchDirectoryPeople({
+            query: args.query,
+            readMask: READ_MASK,
+            sources: DIRECTORY_SOURCES,
+            pageSize: args.page_size || 20,
+            pageToken: args.page_token,
+          });
+          return asText({
+            people: (res.data.people || []).map((p) => toContact(p, "contacts")),
+            next_page_token: res.data.nextPageToken || null,
+            total_size: res.data.totalSize,
+          });
+        });
+      },
+    },
+    {
+      name: "contacts_list_directory",
+      readOnly: true,
+      description:
+        "List people in the organization's Workspace directory, one page at a time. " +
+        "Works only for Google Workspace accounts; a personal gmail.com account has no directory. " +
+        `Needs scope directory.readonly. ${acct}`,
+      inputSchema: { type: "object" as const, properties: directoryProps, required: ["account"] },
+      handler: async (args: { account: string; page_size?: number; page_token?: string }) =>
+        runDirectory(args.account, async () => {
+          const people = await getClient(args.account);
+          const res = await people.people.listDirectoryPeople({
+            readMask: READ_MASK,
+            sources: DIRECTORY_SOURCES,
+            pageSize: args.page_size || 100,
+            pageToken: args.page_token,
+          });
+          return asText({
+            people: (res.data.people || []).map((p) => toContact(p, "contacts")),
+            next_page_token: res.data.nextPageToken || null,
+          });
+        }),
+    },
+  ];
 
   const more: ToolDef[] = [
     {
@@ -381,6 +447,7 @@ export function createContactsTools(
       },
     },
     ...more,
+    ...directoryTools,
   ];
 }
 

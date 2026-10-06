@@ -105,6 +105,8 @@ const chatMessagesReadonly = `${CHAT}chat.messages.readonly`;
 const chatReactions = `${CHAT}chat.messages.reactions`;
 const chatReactionsCreate = `${CHAT}chat.messages.reactions.create`;
 const chatReactionsReadonly = `${CHAT}chat.messages.reactions.readonly`;
+const chatPins = `${CHAT}chat.spaces.pins`;
+const chatPinsReadonly = `${CHAT}chat.spaces.pins.readonly`;
 
 const NEEDS = {
   spaces: [SCOPE.chatSpaces, SCOPE.chatSpacesReadonly],
@@ -118,7 +120,30 @@ const NEEDS = {
   messages: [SCOPE.chatMessages, SCOPE.chatMessagesCreate],
   membersRead: [SCOPE.chatMemberships, SCOPE.chatMembershipsReadonly],
   membersWrite: [SCOPE.chatMemberships],
+  // chat.spaces already authorizes pin create/delete/list, so pins need no new scope.
+  pinsRead: [SCOPE.chatSpaces, SCOPE.chatSpacesReadonly, chatPins, chatPinsReadonly],
+  pinsWrite: [SCOPE.chatSpaces, chatPins],
+  deleteSpace: [SCOPE.chatDelete],
+  readStateRead: [SCOPE.chatReadState, SCOPE.chatReadStateReadonly],
+  readStateWrite: [SCOPE.chatReadState],
+  spaceSettings: [SCOPE.chatSpaceSettings],
 };
+
+const NOTIFICATION_SETTINGS = ["ALL", "MAIN_CONVERSATIONS", "FOR_YOU", "OFF"] as const;
+const MUTE_SETTINGS = ["UNMUTED", "MUTED"] as const;
+
+/** users/me/spaces/X/<leaf> for the calling user. */
+function userSpaceResource(space: string, leaf: string): string {
+  return `users/me/${spaceName(space)}/${leaf}`;
+}
+
+/** Normalizes spaces/X/messagePins/Y or a bare pin id (needs space). */
+export function pinName(pin: string, space?: string): string {
+  const trimmed = pin.trim();
+  if (/^spaces\/[^/]+\/messagePins\/[^/]+$/.test(trimmed)) return trimmed;
+  if (!space) throw new Error("pass the full pin name (spaces/X/messagePins/Y) or space plus pin id");
+  return `${spaceName(space)}/messagePins/${trimmed.replace(/^messagePins\//, "")}`;
+}
 
 /**
  * Google Chat tools, acting as the signed-in user. They need the chat.* scopes
@@ -702,6 +727,272 @@ export function createChatTools(
           const chat = await getClient(args.account);
           await chat.spaces.messages.reactions.delete({ name } as never);
           return asText({ deleted: name });
+        }),
+    },
+    {
+      name: "chat_list_pins",
+      readOnly: true,
+      description:
+        "List the pinned messages in a Google Chat space (pin names and the messages they pin). " +
+        "Needs scope chat.spaces or chat.spaces.readonly. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          space,
+          page_size: { type: "number" as const, description: "Max pins per page (max 100)" },
+          page_token: { type: "string" as const, description: "next_page_token from the previous call" },
+        },
+        required: ["account", "space"],
+      },
+      handler: async (args: { account: string; space: string; page_size?: number; page_token?: string }) =>
+        withScope(args.account, NEEDS.pinsRead, scopes, async () => {
+          const chat = await getClient(args.account);
+          const res = await chat.spaces.messagePins.list({
+            parent: spaceName(args.space),
+            ...(args.page_size ? { pageSize: args.page_size } : {}),
+            ...(args.page_token ? { pageToken: args.page_token } : {}),
+          } as never);
+          const data = res.data as chat_v1.Schema$ListMessagePinsResponse;
+          return asText({ pins: data.messagePins ?? [], next_page_token: data.nextPageToken || null });
+        }),
+    },
+    {
+      name: "chat_pin_message",
+      readOnly: false,
+      description:
+        "Pin a message in a Google Chat space so everyone sees it highlighted. Needs scope chat.spaces. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          message: { type: "string" as const, description: "Message name (spaces/X/messages/Y) or id" },
+          space: { type: "string" as const, description: "Space, when message is a bare id" },
+        },
+        required: ["account", "message"],
+      },
+      handler: async (args: { account: string; message: string; space?: string }) =>
+        withScope(args.account, NEEDS.pinsWrite, scopes, async () => {
+          const message = messageName(args.message, args.space);
+          const parent = message.replace(/\/messages\/[^/]+$/, "");
+          const chat = await getClient(args.account);
+          const res = await chat.spaces.messagePins.create({ parent, requestBody: { message } } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "chat_unpin_message",
+      readOnly: false,
+      description:
+        "Unpin a pinned message in a Google Chat space. Pass the pin name from chat_list_pins " +
+        "(spaces/X/messagePins/Y) or a message name, whose id equals its pin id. Needs scope chat.spaces. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          pin: { type: "string" as const, description: "Pin name (spaces/X/messagePins/Y) or pin id" },
+          message: { type: "string" as const, description: "Alternatively the pinned message name or id" },
+          space: { type: "string" as const, description: "Space, when pin or message is a bare id" },
+        },
+        required: ["account"],
+      },
+      handler: async (args: { account: string; pin?: string; message?: string; space?: string }) =>
+        withScope(args.account, NEEDS.pinsWrite, scopes, async () => {
+          let name: string;
+          if (args.pin) name = pinName(args.pin, args.space);
+          else if (args.message) name = messageName(args.message, args.space).replace("/messages/", "/messagePins/");
+          else throw new Error("pass pin, or message");
+          const chat = await getClient(args.account);
+          await chat.spaces.messagePins.delete({ name } as never);
+          return asText({ unpinned: name });
+        }),
+    },
+    {
+      name: "chat_delete_space",
+      readOnly: false,
+      description:
+        "DESTRUCTIVE AND PERMANENT: delete a Google Chat space and all its messages and memberships. " +
+        "It cannot be undone and there is no trash. The caller must be allowed to delete the space (its owner/manager). " +
+        "Needs scope chat.delete, which Google classifies as restricted. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: { account, space },
+        required: ["account", "space"],
+      },
+      handler: async (args: { account: string; space: string }) =>
+        withScope(args.account, NEEDS.deleteSpace, scopes, async () => {
+          const name = spaceName(args.space);
+          const chat = await getClient(args.account);
+          await chat.spaces.delete({ name } as never);
+          return asText({ deleted: name });
+        }),
+    },
+    {
+      name: "chat_get_read_state",
+      readOnly: true,
+      description:
+        "Get the signed-in user's read state for a space (lastReadTime: messages after it show as unread). " +
+        "With thread, returns that thread's read state instead. Only the caller's own state is available. " +
+        "Needs scope chat.users.readstate. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          space,
+          thread: { type: "string" as const, description: "Optional thread id or name (spaces/X/threads/Y)" },
+        },
+        required: ["account", "space"],
+      },
+      handler: async (args: { account: string; space: string; thread?: string }) =>
+        withScope(args.account, NEEDS.readStateRead, scopes, async () => {
+          const chat = await getClient(args.account);
+          if (args.thread) {
+            const t = args.thread.trim().replace(/^spaces\/[^/]+\/threads\//, "");
+            const name = `${userSpaceResource(args.space, "threads")}/${t}/threadReadState`;
+            const res = await chat.users.spaces.threads.getThreadReadState({ name } as never);
+            return asText(res.data);
+          }
+          const res = await chat.users.spaces.getSpaceReadState({ name: userSpaceResource(args.space, "spaceReadState") } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "chat_mark_space_read",
+      readOnly: false,
+      description:
+        "Set the signed-in user's last-read time for a space. Default is now, which marks the whole space read. " +
+        "Pass an earlier RFC 3339 read_time to mark it (partly) unread. Only top-level messages are affected, not thread replies. " +
+        "Needs scope chat.users.readstate. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          space,
+          read_time: { type: "string" as const, description: "RFC 3339 timestamp (default: now). Earlier than the latest message leaves the space unread." },
+        },
+        required: ["account", "space"],
+      },
+      handler: async (args: { account: string; space: string; read_time?: string }) =>
+        withScope(args.account, NEEDS.readStateWrite, scopes, async () => {
+          const when = args.read_time ? new Date(args.read_time) : new Date();
+          if (Number.isNaN(when.getTime())) throw new Error("read_time is not a valid timestamp");
+          const chat = await getClient(args.account);
+          const res = await chat.users.spaces.updateSpaceReadState({
+            name: userSpaceResource(args.space, "spaceReadState"),
+            updateMask: "lastReadTime",
+            requestBody: { lastReadTime: when.toISOString() },
+          } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "chat_get_notification_setting",
+      readOnly: true,
+      description:
+        "Get the signed-in user's notification and mute settings for a Google Chat space. " +
+        "Needs scope chat.users.spacesettings. " +
+        accountDescription(getAccounts),
+      inputSchema: { type: "object" as const, properties: { account, space }, required: ["account", "space"] },
+      handler: async (args: { account: string; space: string }) =>
+        withScope(args.account, NEEDS.spaceSettings, scopes, async () => {
+          const chat = await getClient(args.account);
+          const res = await chat.users.spaces.spaceNotificationSetting.get({
+            name: userSpaceResource(args.space, "spaceNotificationSetting"),
+          } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "chat_set_notification_setting",
+      readOnly: false,
+      description:
+        "Change the signed-in user's notifications for a space: notification_setting ALL, MAIN_CONVERSATIONS, FOR_YOU or OFF " +
+        "(MAIN_CONVERSATIONS and FOR_YOU are unavailable in 1:1 DMs) and/or mute_setting MUTED or UNMUTED. " +
+        "Only the fields you pass change. Needs scope chat.users.spacesettings. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          space,
+          notification_setting: { type: "string" as const, enum: [...NOTIFICATION_SETTINGS] },
+          mute_setting: { type: "string" as const, enum: [...MUTE_SETTINGS] },
+        },
+        required: ["account", "space"],
+      },
+      handler: async (args: { account: string; space: string; notification_setting?: string; mute_setting?: string }) =>
+        withScope(args.account, NEEDS.spaceSettings, scopes, async () => {
+          const body: Record<string, string> = {};
+          const mask: string[] = [];
+          if (args.notification_setting !== undefined) {
+            if (!(NOTIFICATION_SETTINGS as readonly string[]).includes(args.notification_setting)) {
+              throw new Error(`notification_setting must be one of ${NOTIFICATION_SETTINGS.join(", ")}`);
+            }
+            body.notificationSetting = args.notification_setting;
+            mask.push("notification_setting");
+          }
+          if (args.mute_setting !== undefined) {
+            if (!(MUTE_SETTINGS as readonly string[]).includes(args.mute_setting)) {
+              throw new Error(`mute_setting must be one of ${MUTE_SETTINGS.join(", ")}`);
+            }
+            body.muteSetting = args.mute_setting;
+            mask.push("mute_setting");
+          }
+          if (mask.length === 0) throw new Error("pass notification_setting and/or mute_setting");
+          const chat = await getClient(args.account);
+          const res = await chat.users.spaces.spaceNotificationSetting.patch({
+            name: userSpaceResource(args.space, "spaceNotificationSetting"),
+            updateMask: mask.join(","),
+            requestBody: body,
+          } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "chat_search_messages",
+      readOnly: true,
+      description:
+        "Search Google Chat messages across every DM and space the user belongs to, or narrow with filter terms. " +
+        "query is the Chat search filter: keywords plus fields such as sender.name = \"users/a@b.c\", " +
+        "space.name = \"spaces/AAA\", create_time >= \"2026-01-01T00:00:00Z\", attachment:*, has_link(), is_unread() " +
+        "(AND between fields, max 1000 chars). Excludes private messages, app messages, blocked users and muted spaces. " +
+        "Needs scope chat.messages (or chat.messages.readonly); is_unread() also needs chat.users.readstate. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          query: { type: "string" as const, description: "Chat search filter" },
+          page_size: { type: "number" as const, description: "Default 25, max 100" },
+          page_token: { type: "string" as const },
+          order_by: { type: "string" as const, description: "'create_time desc' (default)" },
+        },
+        required: ["account", "query"],
+      },
+      handler: async (args: { account: string; query: string; page_size?: number; page_token?: string; order_by?: string }) =>
+        withScope(args.account, NEEDS.messagesRead, scopes, async () => {
+          if (!args.query.trim()) throw new Error("query is empty");
+          const chat = await getClient(args.account);
+          const res = await chat.spaces.messages.search({
+            parent: "spaces/-",
+            requestBody: {
+              filter: args.query,
+              ...(args.page_size ? { pageSize: args.page_size } : {}),
+              ...(args.page_token ? { pageToken: args.page_token } : {}),
+              ...(args.order_by ? { orderBy: args.order_by } : {}),
+            },
+          } as never);
+          const data = res.data as chat_v1.Schema$SearchMessagesResponse;
+          return asText({
+            results: (data.results ?? []).map((r) => summarizeMessage((r.message ?? {}) as chat_v1.Schema$Message)),
+            next_page_token: data.nextPageToken || null,
+          });
         }),
     },
     {

@@ -883,6 +883,8 @@ const NEEDS = {
   send: [SCOPE.gmailModify, GMAIL_COMPOSE],
   labels: [SCOPE.gmailModify, GMAIL_LABELS],
   settings: [GMAIL_SETTINGS_BASIC],
+  // Settings reads are also authorized by gmail.modify and gmail.readonly.
+  settingsRead: [GMAIL_SETTINGS_BASIC, SCOPE.gmailModify, SCOPE.gmailReadonly],
   read: [SCOPE.gmailReadonly, SCOPE.gmailModify],
 };
 
@@ -995,9 +997,10 @@ export interface FilterArgs {
   star?: boolean;
   mark_important?: boolean;
   never_spam?: boolean;
+  forward?: string;
 }
 
-/** Creates a standing rule applied to every future incoming message. Forwarding is not offered. */
+/** Creates a standing rule applied to every future incoming message. `forward` needs an already-verified forwarding address. */
 export async function createFilter(gmail: any, args: FilterArgs) {
   const criteria: any = {};
   if (args.from) criteria.from = args.from;
@@ -1021,8 +1024,10 @@ export async function createFilter(gmail: any, args: FilterArgs) {
   if (args.mark_read) removeLabelIds.push("UNREAD");
   if (args.archive) removeLabelIds.push("INBOX");
   if (args.never_spam) removeLabelIds.push("SPAM");
-  if (addLabelIds.length === 0 && removeLabelIds.length === 0) throw new Error("Provide at least one action.");
+  const forward = (args.forward ?? "").trim();
+  if (addLabelIds.length === 0 && removeLabelIds.length === 0 && !forward) throw new Error("Provide at least one action.");
   const action: any = {};
+  if (forward) action.forward = forward;
   if (addLabelIds.length) action.addLabelIds = addLabelIds;
   if (removeLabelIds.length) action.removeLabelIds = removeLabelIds;
   const res = await gmail.users.settings.filters.create({ userId: "me", requestBody: { criteria, action } });
@@ -1124,6 +1129,76 @@ export async function listHistory(gmail: any, args: HistoryArgs) {
   return res.data;
 }
 
+const IMAP_EXPUNGE = ["archive", "trash", "deleteForever"];
+const POP_WINDOW = ["disabled", "fromNowOn", "allMail"];
+const POP_DISPOSITION = ["leaveInInbox", "archive", "trash", "markRead"];
+
+export async function listForwardingAddresses(gmail: any) {
+  const res = await gmail.users.settings.forwardingAddresses.list({ userId: "me" });
+  return { forwardingAddresses: res.data?.forwardingAddresses ?? [] };
+}
+
+export async function getForwardingAddress(gmail: any, email: string) {
+  if (!email) throw new Error("forwarding_email is required.");
+  const res = await gmail.users.settings.forwardingAddresses.get({ userId: "me", forwardingEmail: email });
+  return res.data;
+}
+
+export async function getAutoForwarding(gmail: any) {
+  const res = await gmail.users.settings.getAutoForwarding({ userId: "me" });
+  return res.data;
+}
+
+export async function getImap(gmail: any) {
+  return (await gmail.users.settings.getImap({ userId: "me" })).data;
+}
+
+export async function getPop(gmail: any) {
+  return (await gmail.users.settings.getPop({ userId: "me" })).data;
+}
+
+export async function getLanguage(gmail: any) {
+  return (await gmail.users.settings.getLanguage({ userId: "me" })).data;
+}
+
+function oneOf(value: unknown, allowed: string[], what: string) {
+  if (typeof value !== "string" || !allowed.includes(value)) throw new Error(`${what} must be one of ${allowed.join(", ")}.`);
+  return value;
+}
+
+/** PUT replaces the whole resource, so read the current settings and change only the fields given. */
+export async function updateImap(
+  gmail: any,
+  args: { enabled?: boolean; auto_expunge?: boolean; expunge_behavior?: string; max_folder_size?: number }
+) {
+  const body: any = { ...(await getImap(gmail)) };
+  let changed = false;
+  if (args.enabled !== undefined) ((body.enabled = args.enabled), (changed = true));
+  if (args.auto_expunge !== undefined) ((body.autoExpunge = args.auto_expunge), (changed = true));
+  if (args.expunge_behavior !== undefined) ((body.expungeBehavior = oneOf(args.expunge_behavior, IMAP_EXPUNGE, "expunge_behavior")), (changed = true));
+  if (args.max_folder_size !== undefined) {
+    if (![0, 1000, 2000, 5000, 10000].includes(args.max_folder_size)) throw new Error("max_folder_size must be 0, 1000, 2000, 5000 or 10000.");
+    body.maxFolderSize = args.max_folder_size;
+    changed = true;
+  }
+  if (!changed) throw new Error("Pass at least one setting to change.");
+  return (await gmail.users.settings.updateImap({ userId: "me", requestBody: body })).data;
+}
+
+export async function updatePop(gmail: any, args: { access_window?: string; disposition?: string }) {
+  const body: any = { ...(await getPop(gmail)) };
+  let changed = false;
+  if (args.access_window !== undefined) ((body.accessWindow = oneOf(args.access_window, POP_WINDOW, "access_window")), (changed = true));
+  if (args.disposition !== undefined) ((body.disposition = oneOf(args.disposition, POP_DISPOSITION, "disposition")), (changed = true));
+  if (!changed) throw new Error("Pass at least one setting to change.");
+  return (await gmail.users.settings.updatePop({ userId: "me", requestBody: body })).data;
+}
+
+export async function updateLanguage(gmail: any, args: { display_language: string }) {
+  if (!args.display_language || !args.display_language.trim()) throw new Error("display_language is required (e.g. en-GB).");
+  return (await gmail.users.settings.updateLanguage({ userId: "me", requestBody: { displayLanguage: args.display_language.trim() } })).data;
+}
+
 const idList = (description: string) => ({ type: "array", items: { type: "string" }, description });
 const labelFields = {
   label_list_visibility: { type: "string", enum: LABEL_LIST_VISIBILITY, description: "Show in the label list" },
@@ -1204,7 +1279,7 @@ export function createGmailExtraTools(
     {
       name: "gmail_create_filter",
       readOnly: false,
-      description: `Create a STANDING filter that acts on every future matching incoming message (label, archive, mark read, star, mark important, never spam). Needs at least one criterion and one action. Does not apply to existing mail and cannot forward. ${acc()}`,
+      description: `Create a STANDING filter that acts on every future matching incoming message (label, archive, mark read, star, mark important, never spam). Needs at least one criterion and one action. Optional forward redirects matching mail to an address that is ALREADY a verified forwarding address (see gmail_list_forwarding_addresses); this server cannot add or verify forwarding addresses, so Gmail rejects any other address. Does not apply to existing mail. ${acc()}`,
       inputSchema: oneAccount({
         from: { type: "string" },
         to: { type: "string" },
@@ -1221,6 +1296,7 @@ export function createGmailExtraTools(
         star: { type: "boolean" },
         mark_important: { type: "boolean" },
         never_spam: { type: "boolean" },
+        forward: { type: "string", description: "Verified forwarding address to redirect matching mail to" },
       }),
       handler: async (a: any) => run(a.account, NEEDS.settings, (g) => createFilter(g, a)),
     },
@@ -1299,6 +1375,77 @@ export function createGmailExtraTools(
         ["start_history_id"]
       ),
       handler: async (a: any) => run(a.account, NEEDS.read, (g) => listHistory(g, a)),
+    },
+    {
+      name: "gmail_list_forwarding_addresses",
+      readOnly: true,
+      description: `List the account's forwarding addresses with verification status (accepted or pending). Read-only: Google allows adding or deleting them only for service accounts with domain-wide delegation. Reads work with gmail.settings.basic, gmail.modify or gmail.readonly. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => listForwardingAddresses(g)),
+    },
+    {
+      name: "gmail_get_forwarding_address",
+      readOnly: true,
+      description: `Get one forwarding address and its verification status. ${acc()}`,
+      inputSchema: oneAccount({ forwarding_email: { type: "string" } }, ["forwarding_email"]),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => getForwardingAddress(g, a.forwarding_email)),
+    },
+    {
+      name: "gmail_get_auto_forwarding",
+      readOnly: true,
+      description: `Read the auto-forwarding setting (enabled, target address, what happens to the original). Read-only: changing it is a service-account-only method. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => getAutoForwarding(g)),
+    },
+    {
+      name: "gmail_get_imap",
+      readOnly: true,
+      description: `Read the IMAP access settings (enabled, auto-expunge, expunge behavior, folder size limit). ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => getImap(g)),
+    },
+    {
+      name: "gmail_update_imap",
+      readOnly: false,
+      description: `Change IMAP access. Only the fields you pass change. Turning IMAP off signs mail apps out of this account. expunge_behavior: archive, trash or deleteForever (deleteForever permanently deletes messages an IMAP client deletes). max_folder_size: 0, 1000, 2000, 5000 or 10000. ${acc()}`,
+      inputSchema: oneAccount({
+        enabled: { type: "boolean" },
+        auto_expunge: { type: "boolean" },
+        expunge_behavior: { type: "string", enum: IMAP_EXPUNGE },
+        max_folder_size: { type: "number" },
+      }),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => updateImap(g, a)),
+    },
+    {
+      name: "gmail_get_pop",
+      readOnly: true,
+      description: `Read the POP access settings (which messages POP can fetch and what happens to them afterwards). ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => getPop(g)),
+    },
+    {
+      name: "gmail_update_pop",
+      readOnly: false,
+      description: `Change POP access. Only the fields you pass change. access_window: disabled, fromNowOn or allMail. disposition (after a message is fetched): leaveInInbox, archive, trash or markRead. ${acc()}`,
+      inputSchema: oneAccount({
+        access_window: { type: "string", enum: POP_WINDOW },
+        disposition: { type: "string", enum: POP_DISPOSITION },
+      }),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => updatePop(g, a)),
+    },
+    {
+      name: "gmail_get_language",
+      readOnly: true,
+      description: `Read the Gmail display language. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settingsRead, (g) => getLanguage(g)),
+    },
+    {
+      name: "gmail_update_language",
+      readOnly: false,
+      description: `Set the Gmail display language (RFC 3066 tag such as en-GB, fr, ja). Gmail may save a close variant; the saved value is returned. ${acc()}`,
+      inputSchema: oneAccount({ display_language: { type: "string" } }, ["display_language"]),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => updateLanguage(g, a)),
     },
   ];
 }

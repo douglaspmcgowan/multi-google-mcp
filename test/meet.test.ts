@@ -70,7 +70,7 @@ test("meet_get_space, update and end conference shape requests", async () => {
 test("readOnly flags and scope refusal", async () => {
   const { tools } = build();
   assert.deepEqual(
-    tools.map((t) => [t.name, t.readOnly]),
+    tools.filter((t) => !/^meet_(list|get_conference)/.test(t.name)).map((t) => [t.name, t.readOnly]),
     [
       ["meet_create_space", false],
       ["meet_get_space", true],
@@ -79,7 +79,7 @@ test("readOnly flags and scope refusal", async () => {
     ]
   );
   const refused = build(() => ["https://www.googleapis.com/auth/calendar"]);
-  for (const t of refused.tools) {
+  for (const t of refused.tools.filter((x) => !/^meet_(list|get_conference)/.test(x.name))) {
     await assert.rejects(() => t.handler({ account: "me", space: "abc", access_type: "OPEN" }), ScopeError);
   }
   const ok = build(() => [MEET_CREATED_SCOPE]);

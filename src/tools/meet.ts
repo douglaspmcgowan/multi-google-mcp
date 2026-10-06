@@ -9,6 +9,9 @@ type MeetClient = meet_v2.Meet;
 /** Lets the app create meeting spaces and manage the ones it created. It does not read other spaces, conference records or transcripts. */
 export const MEET_CREATED_SCOPE = "https://www.googleapis.com/auth/meetings.space.created";
 
+/** Reads conference records, participants, recordings and transcripts of any meeting the user organized or attended. */
+export const MEET_READONLY_SCOPE = "https://www.googleapis.com/auth/meetings.space.readonly";
+
 export const ACCESS_TYPES = ["OPEN", "TRUSTED", "RESTRICTED"] as const;
 export const ENTRY_POINT_ACCESS = ["ALL", "CREATOR_APP_ONLY"] as const;
 
@@ -69,6 +72,178 @@ export function buildSpaceConfig(args: { access_type?: string; entry_point_acces
     mask.push("config.entryPointAccess");
   }
   return { config, mask };
+}
+
+/** "conferenceRecords/abc" or a bare id. */
+export function conferenceName(input: string): string {
+  const s = (input ?? "").trim();
+  if (!s) throw new Error("conference_record is required: a conferenceRecords/... name or id.");
+  return s.startsWith("conferenceRecords/") ? s : `conferenceRecords/${s}`;
+}
+
+const SUB = { participant: "participants", transcript: "transcripts" } as const;
+
+/** Child resource under a conference record: accepts the full name, or the id plus the conference. */
+export function childName(kind: keyof typeof SUB, value: string, conference?: string): string {
+  const v = (value ?? "").trim();
+  if (!v) throw new Error(`${kind} is required.`);
+  if (v.startsWith("conferenceRecords/")) return v;
+  if (!conference) throw new Error(`Pass the full ${kind} name (conferenceRecords/.../${SUB[kind]}/...) or conference_record plus the id.`);
+  return `${conferenceName(conference)}/${SUB[kind]}/${v.replace(new RegExp(`^${SUB[kind]}/`), "")}`;
+}
+
+function meetRecordTools(
+  getClient: (account: string) => MeetClient | Promise<MeetClient>,
+  getAccounts: () => string[],
+  lookup: ScopeLookup,
+  account: { type: "string"; description: string }
+): ToolDef[] {
+  const NOTE =
+    "Needs scope meetings.space.readonly to see every meeting you organized or attended (meetings.space.created alone sees only spaces this app created). ";
+  const run = <T>(a: string, fn: () => Promise<T>) => withScope(a, [MEET_READONLY_SCOPE, MEET_CREATED_SCOPE], lookup, fn);
+  const conference = { type: "string" as const, description: "Conference record name (conferenceRecords/...) or id from meet_list_conference_records" };
+  const paging = {
+    page_size: { type: "number" as const, description: "Max results per page" },
+    page_token: { type: "string" as const, description: "next_page_token from the previous call" },
+  };
+  const filter = (d: string) => ({ type: "string" as const, description: d });
+  const page = (a: { page_size?: number; page_token?: string; filter?: string }) => ({
+    ...(a.page_size ? { pageSize: a.page_size } : {}),
+    ...(a.page_token ? { pageToken: a.page_token } : {}),
+    ...(a.filter ? { filter: a.filter } : {}),
+  });
+  const acc = accountDescription(getAccounts);
+  const listTool = (
+    name: string,
+    description: string,
+    extra: Record<string, unknown>,
+    required: string[],
+    parent: (a: any) => string,
+    call: (meet: MeetClient, req: any) => Promise<{ data: any }>,
+    key: string
+  ): ToolDef => ({
+    name,
+    readOnly: true,
+    description: `${description} ${NOTE}${acc}`,
+    inputSchema: { type: "object" as const, properties: { account, ...extra, ...paging }, required: ["account", ...required] },
+    handler: async (a: any) => {
+      const p = parent(a);
+      return run(a.account, async () => {
+        const meet = await getClient(a.account);
+        const res = await call(meet, { parent: p, ...page(a) });
+        return asText({ [key]: res.data[key] ?? [], next_page_token: res.data.nextPageToken || null });
+      });
+    },
+  });
+
+  return [
+    {
+      name: "meet_list_conference_records",
+      readOnly: true,
+      description: `List Google Meet conference records (past and current meetings), newest first. Optional filter on space.meeting_code, space.name, start_time, end_time, e.g. start_time>="2026-01-01T00:00:00Z". ${NOTE}${acc}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: { account, filter: filter('Meet filter, e.g. space.meeting_code = "abc-mnop-xyz"'), ...paging },
+        required: ["account"],
+      },
+      handler: async (a: any) =>
+        run(a.account, async () => {
+          const meet = await getClient(a.account);
+          const res = await meet.conferenceRecords.list(page(a));
+          return asText({ conference_records: res.data.conferenceRecords ?? [], next_page_token: res.data.nextPageToken || null });
+        }),
+    },
+    {
+      name: "meet_get_conference_record",
+      readOnly: true,
+      description: `Get one conference record: start and end time and its space. ${NOTE}${acc}`,
+      inputSchema: { type: "object" as const, properties: { account, conference_record: conference }, required: ["account", "conference_record"] },
+      handler: async (a: any) => {
+        const name = conferenceName(a.conference_record);
+        return run(a.account, async () => {
+          const meet = await getClient(a.account);
+          return asText((await meet.conferenceRecords.get({ name })).data);
+        });
+      },
+    },
+    listTool(
+      "meet_list_participants",
+      "List who joined a conference (signed-in users, anonymous users, phone callers) with first join and last leave times. Optional filter on earliest_start_time / latest_end_time, e.g. latest_end_time IS NULL for people still in the call.",
+      { conference_record: conference, filter: filter("Meet filter") },
+      ["conference_record"],
+      (a) => conferenceName(a.conference_record),
+      (m, r) => m.conferenceRecords.participants.list(r),
+      "participants"
+    ),
+    listTool(
+      "meet_list_participant_sessions",
+      "List each join-and-leave session of one participant in a conference. Optional filter on start_time / end_time.",
+      {
+        participant: { type: "string" as const, description: "Participant name (conferenceRecords/X/participants/Y) or id" },
+        conference_record: { type: "string" as const, description: "Conference record, when participant is a bare id" },
+        filter: filter("Meet filter, e.g. end_time IS NULL"),
+      },
+      ["participant"],
+      (a) => childName("participant", a.participant, a.conference_record),
+      (m, r) => m.conferenceRecords.participants.participantSessions.list(r),
+      "participantSessions"
+    ),
+    listTool(
+      "meet_list_recordings",
+      "List the recordings of a conference: state, start/end time and the Drive file id and download link. Read the file itself with the drive_* tools.",
+      { conference_record: conference },
+      ["conference_record"],
+      (a) => conferenceName(a.conference_record),
+      (m, r) => m.conferenceRecords.recordings.list(r),
+      "recordings"
+    ),
+    listTool(
+      "meet_list_transcripts",
+      "List the transcripts of a conference: state, times and the Google Docs document (docsDestination) holding the transcript, readable with docs_read_markdown.",
+      { conference_record: conference },
+      ["conference_record"],
+      (a) => conferenceName(a.conference_record),
+      (m, r) => m.conferenceRecords.transcripts.list(r),
+      "transcripts"
+    ),
+    {
+      name: "meet_list_transcript_entries",
+      readOnly: true,
+      description: `Read the full text of a transcript as speaker-attributed entries (participant, time, language, text), in time order. all_pages fetches every page (up to 50 pages of 100). Entries can differ slightly from the transcript Doc. ${NOTE}${acc}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          transcript: { type: "string" as const, description: "Transcript name (conferenceRecords/X/transcripts/Y) or id" },
+          conference_record: { type: "string" as const, description: "Conference record, when transcript is a bare id" },
+          all_pages: { type: "boolean" as const, description: "Follow next_page_token until done (default false)" },
+          ...paging,
+        },
+        required: ["account", "transcript"],
+      },
+      handler: async (a: any) => {
+        const parent = childName("transcript", a.transcript, a.conference_record);
+        return run(a.account, async () => {
+          const meet = await getClient(a.account);
+          const entries: unknown[] = [];
+          let token: string | undefined = a.page_token;
+          let next: string | null = null;
+          for (let i = 0; i < (a.all_pages ? 50 : 1); i++) {
+            const res = await meet.conferenceRecords.transcripts.entries.list({
+              parent,
+              pageSize: a.all_pages ? 100 : a.page_size,
+              ...(token ? { pageToken: token } : {}),
+            });
+            entries.push(...(res.data.transcriptEntries ?? []));
+            next = res.data.nextPageToken || null;
+            if (!next || !a.all_pages) break;
+            token = next;
+          }
+          return asText({ entries, next_page_token: next });
+        });
+      },
+    },
+  ];
 }
 
 export function createMeetTools(
@@ -148,6 +323,7 @@ export function createMeetTools(
         });
       },
     },
+    ...meetRecordTools(getClient, getAccounts, lookup, account),
     {
       name: "meet_end_active_conference",
       readOnly: false,
