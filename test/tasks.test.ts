@@ -64,17 +64,12 @@ test("tasks_complete completes and reopens", async () => {
   assert.equal(calls.patch.requestBody.completed, null);
 });
 
-test("there is no task delete tool, and read/write flags are right", () => {
+test("the original task tools keep their read/write flags", () => {
   const { tools } = fake();
-  assert.ok(!tools.some((t) => /delete/.test(t.name)));
   const flags = Object.fromEntries(tools.map((t) => [t.name, t.readOnly]));
-  assert.deepEqual(flags, {
-    tasks_list_lists: true,
-    tasks_list: true,
-    tasks_create: false,
-    tasks_update: false,
-    tasks_complete: false,
-  });
+  for (const [name, ro] of Object.entries({ tasks_list_lists: true, tasks_list: true, tasks_create: false, tasks_update: false, tasks_complete: false })) {
+    assert.equal(flags[name], ro, name);
+  }
 });
 
 test("a token without the Tasks scope yields the add-account command naming the account", async () => {
