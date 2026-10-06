@@ -78,7 +78,10 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 - `drive_list_recent` — files in a folder changed since a date, newest first; `recursive` walks subfolders
 
 **Google Chat** (needs the chat scopes and a configured Chat app — see below)
-- `chat_list_spaces`, `chat_post_message` (optional thread), `chat_list_members`, `chat_add_members` (`email` or `emails`)
+- `chat_list_spaces`, `chat_get_space`, `chat_create_space` (optional initial members), `chat_create_group_chat`, `chat_find_or_create_dm`, `chat_update_space` (name, description, guidelines)
+- `chat_post_message` (optional thread), `chat_list_messages` (time, thread, order filters), `chat_get_message`, `chat_update_message`, `chat_delete_message` (destructive), `chat_upload_attachment`
+- `chat_list_members`, `chat_add_members` (`email` or `emails`), `chat_remove_member` (destructive), `chat_update_member_role` (manager or member)
+- `chat_add_reaction`, `chat_list_reactions`, `chat_remove_reaction`
 
 **Google Forms** (needs the Forms API enabled)
 - `forms_create` — form plus questions (short_text, paragraph, multiple_choice, checkboxes, dropdown, scale, date, time); published unless `publish: false`

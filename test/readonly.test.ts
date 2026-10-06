@@ -38,7 +38,9 @@ const EXPECTED_WRITES = [
   "docs_delete_tab", "docs_write_tab", "docs_write_markdown", "docs_append_to_tab", "docs_replace_text",
   "docs_batch_update", "sheets_write_range", "sheets_append_rows", "sheets_batch_update",
   "slides_replace_text", "slides_add_from_outline", "slides_batch_update",
-  "chat_post_message", "chat_add_members", "forms_create",
+  "chat_post_message", "chat_add_members", "chat_create_space", "chat_create_group_chat", "chat_find_or_create_dm",
+  "chat_update_space", "chat_update_message", "chat_delete_message", "chat_upload_attachment", "chat_remove_member",
+  "chat_update_member_role", "chat_add_reaction", "chat_remove_reaction", "forms_create",
   "tasks_create", "tasks_update", "tasks_complete",
 ];
 
