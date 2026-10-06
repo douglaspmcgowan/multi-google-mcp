@@ -24,12 +24,22 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_modify_labels` — add or remove labels (by name or id) on messages or a thread; `gmail_archive` and `gmail_mark_read` are thin wrappers. There is no message trash or delete tool.
 - `gmail_read_thread` — every message in a thread with plain-text bodies
 - `gmail_search_all` — search all (or chosen) accounts at once, grouped by account; one failing account does not fail the rest
+- `gmail_trash`, `gmail_untrash` — move messages or threads to Trash and back (recoverable; there is still no permanent delete)
+- `gmail_send_draft` — send an existing draft immediately
+- `gmail_create_label`, `gmail_update_label`, `gmail_delete_label` — manage labels (name, visibility, colour)
+- `gmail_list_filters`, `gmail_create_filter`, `gmail_delete_filter` — standing filters (`gmail.settings.basic`; no forwarding)
+- `gmail_get_vacation`, `gmail_set_vacation` — auto-reply; `gmail_list_send_as`, `gmail_update_signature` — signatures
+- `gmail_get_profile`, `gmail_list_history` — address, totals, historyId and recent mailbox changes
+- Star, mark important and batch label changes need no extra tool: use `gmail_modify_labels` with `STARRED` / `IMPORTANT` and many `message_ids`.
 
 **Tasks** (Google Tasks; needs the `tasks` scope)
-- `tasks_list_lists`, `tasks_list`, `tasks_create`, `tasks_update`, `tasks_complete` (`completed: false` reopens). No delete tool.
+- `tasks_list_lists`, `tasks_list` (`show_completed`, `show_hidden`, `due_min`/`due_max`), `tasks_get`, `tasks_create` (notes, due, `parent`), `tasks_update`, `tasks_complete` (`completed: false` reopens), `tasks_move` (reorder, reparent, move between lists), `tasks_delete`, `tasks_clear_completed`
+- `tasks_create_list`, `tasks_rename_list`, `tasks_delete_list` (`tasks_delete` and `tasks_delete_list` are destructive)
 
-**Contacts** (needs `contacts.readonly` and `contacts.other.readonly`)
+**Contacts** (reads need `contacts` or `contacts.readonly`; other-contact search needs `contacts.other.readonly`; writes need `contacts`)
 - `contacts_search` — names, emails and phone numbers from saved and other contacts
+- `contacts_list`, `contacts_get`, `contacts_create`, `contacts_update` (fetches the etag), `contacts_delete` (destructive)
+- `contacts_list_groups`, `contacts_create_group`, `contacts_add_to_group`, `contacts_remove_from_group`, `contacts_copy_other_to_my_contacts` (needs `contacts` and `contacts.other.readonly`)
 
 **Calendar**
 - `calendar_freebusy` — busy intervals per account and the merged free windows across accounts (`min_minutes`, optional `working_hours`)
@@ -37,6 +47,16 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `calendar_create_event` — create an event
 - `calendar_update_event` — update an existing event (optional `send_updates`)
 - `calendar_rsvp` — accept, decline or tentatively accept an invite (optional `send_updates`)
+- `calendar_get_event` — one event in full (attendees, Meet link, recurrence, reminders)
+- `calendar_search_events` — free-text search, optional time window, one or all calendars
+- `calendar_list_instances` — occurrences of a recurring event
+- `calendar_quick_add` — create an event from a natural-language sentence
+- `calendar_move_event` — move an event to another calendar
+- `calendar_create_calendar`, `calendar_update_calendar`, `calendar_delete_calendar` — secondary calendars (delete is permanent)
+- `calendar_list_acl`, `calendar_share_calendar`, `calendar_unshare_calendar` — calendar sharing
+- `calendar_list_colors`, `calendar_get_settings` — colour ids and account settings
+- `calendar_create_event` / `calendar_update_event` also take `recurrence`, `reminders`, `color_id`, `visibility`, `time_zone`, all-day `YYYY-MM-DD` dates and `add_meet` (new Google Meet link)
+- `meet_create_space`, `meet_get_space`, `meet_update_space`, `meet_end_active_conference` — Google Meet spaces this app created (`meetings.space.created` scope)
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
 
@@ -71,18 +91,29 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 **Comments** (any Drive file; Drive API comments/replies)
 - `docs_list_comments` — comments with replies; `include_resolved` for resolved ones
 - `docs_add_comment` — unanchored, or with `quoted_text`/`anchor` (Docs/Sheets/Slides display API comments as unanchored — a Google limitation)
-- `docs_reply_comment`, `docs_resolve_comment` (`reopen: true` to reopen)
+- `docs_reply_comment`, `docs_resolve_comment` (`reopen: true` to reopen), `docs_reopen_comment`, `docs_delete_comment` (destructive)
 
 **Drive additions**
 - `drive_share` — `email` for one or `emails` for many; per-email `{email, ok, permissionId | error}`; `notify`, `message`
 - `drive_list_recent` — files in a folder changed since a date, newest first; `recursive` walks subfolders
+- `drive_list_folder` (paged children), `drive_list_shared_drives`, `drive_list_revisions`, `drive_download_revision` (binary files), `drive_get_storage_quota`
+- `drive_update_permission`, `drive_transfer_ownership` (direct for Workspace, pending owner for gmail.com), `drive_set_link_sharing`, `drive_star`, `drive_update_metadata`
+- Search, metadata, permission and move calls pass `supportsAllDrives`. There is deliberately no permanent-delete tool; trash is the delete surface.
 
 **Google Chat** (needs the chat scopes and a configured Chat app — see below)
-- `chat_list_spaces`, `chat_post_message` (optional thread), `chat_list_members`, `chat_add_members` (`email` or `emails`)
+- `chat_list_spaces`, `chat_get_space`, `chat_create_space` (optional initial members), `chat_create_group_chat`, `chat_find_or_create_dm`, `chat_update_space` (name, description, guidelines)
+- `chat_post_message` (optional thread), `chat_list_messages` (time, thread, order filters), `chat_get_message`, `chat_update_message`, `chat_delete_message` (destructive), `chat_upload_attachment`
+- `chat_list_members`, `chat_add_members` (`email` or `emails`), `chat_remove_member` (destructive), `chat_update_member_role` (manager or member)
+- `chat_add_reaction`, `chat_list_reactions`, `chat_remove_reaction`
 
 **Google Forms** (needs the Forms API enabled)
 - `forms_create` — form plus questions (short_text, paragraph, multiple_choice, checkboxes, dropdown, scale, date, time); published unless `publish: false`
 - `forms_list_responses` — answers keyed by question title; optional `since`
+- `forms_get` (full structure), `forms_add_questions`, `forms_batch_update` (raw requests), `forms_get_response`
+
+**Sheets additions**: `sheets_clear_range`, `sheets_create` (named tabs), `sheets_add_tab`, `sheets_rename_tab`, `sheets_delete_tab` (destructive), `sheets_find`
+
+**Slides additions**: `slides_read_text` (shapes, tables, speaker notes), `slides_get_thumbnail`, `slides_save_thumbnail`, `slides_delete_slide` (destructive), `slides_duplicate_slide`, `slides_reorder_slides`, `slides_insert_image`, `slides_set_speaker_notes`
 
 **Utility**
 - `google_list_accounts` — list all connected accounts

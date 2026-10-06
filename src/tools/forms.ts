@@ -261,6 +261,162 @@ export function createFormsTools(
           return asText({ formId: args.form_id, title: form.info?.title, count: flat.length, responses: flat });
         }),
     },
+    {
+      name: "forms_get",
+
+      readOnly: true,
+      description:
+        "Read a Google Form's full structure: info, settings, responderUri, linkedSheetId and every " +
+        "item with its itemId and question ids and types (choice options, scale bounds, etc.), in " +
+        "order. Use the itemIds and indexes with forms_batch_update to edit, move or delete items. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          form_id: { type: "string" as const, description: "Form ID (from /forms/d/<id>/edit)" },
+        },
+        required: ["account", "form_id"],
+      },
+      handler: async (args: { account: string; form_id: string }) =>
+        withScope(args.account, [SCOPE.drive, SCOPE.driveReadonly, SCOPE.formsBody, SCOPE.formsBodyReadonly], scopes, async () => {
+          const forms = await getClient(args.account);
+          const res = await forms.forms.get({ formId: args.form_id } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "forms_add_questions",
+
+      readOnly: false,
+      description:
+        "Append questions to an existing Google Form (same question shapes as forms_create: " +
+        `${QUESTION_TYPES.join(", ")}). By default they go after the current last item; ` +
+        "position inserts them at that item index instead. Returns the form's new item count. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          form_id: { type: "string" as const, description: "Form ID" },
+          position: { type: "number" as const, description: "Item index to insert at (default: end)" },
+          questions: {
+            type: "array" as const,
+            description: "Questions in order",
+            items: {
+              type: "object" as const,
+              properties: {
+                title: { type: "string" as const, description: "Question text" },
+                type: { type: "string" as const, description: QUESTION_TYPES.join(", ") },
+                description: { type: "string" as const, description: "Help text" },
+                required: { type: "boolean" as const, description: "Required answer" },
+                options: { type: "array" as const, description: "Choices", items: { type: "string" as const } },
+                low: { type: "number" as const, description: "Scale low (0 or 1)" },
+                high: { type: "number" as const, description: "Scale high (2-10)" },
+                low_label: { type: "string" as const, description: "Scale low label" },
+                high_label: { type: "string" as const, description: "Scale high label" },
+              },
+              required: ["title", "type"],
+            },
+          },
+        },
+        required: ["account", "form_id", "questions"],
+      },
+      handler: async (args: { account: string; form_id: string; position?: number; questions: FormQuestion[] }) =>
+        withScope(args.account, [SCOPE.drive, SCOPE.formsBody], scopes, async () => {
+          if (!args.questions || args.questions.length === 0) throw new Error("questions must contain at least one question");
+          const forms = await getClient(args.account);
+          const current = (await forms.forms.get({ formId: args.form_id } as never)).data as forms_v1.Schema$Form;
+          const count = (current.items ?? []).length;
+          const start = args.position ?? count;
+          if (!Number.isInteger(start) || start < 0 || start > count) {
+            throw new Error(`position must be an integer from 0 to ${count}`);
+          }
+          const requests = buildQuestionRequests(args.questions).map((request, i) => {
+            const create = (request as { createItem: { location: { index: number } } }).createItem;
+            create.location.index = start + i;
+            return request;
+          });
+          await forms.forms.batchUpdate({ formId: args.form_id, requestBody: { requests } } as never);
+          return asText({
+            formId: args.form_id,
+            added: requests.length,
+            startIndex: start,
+            itemCount: count + requests.length,
+          });
+        }),
+    },
+    {
+      name: "forms_batch_update",
+
+      readOnly: false,
+      description:
+        "Apply raw Forms API batchUpdate requests: createItem, updateItem (with updateMask), " +
+        "moveItem, deleteItem (destructive: removes the question and the answers' link to it), " +
+        "updateFormInfo, updateSettings. Applied atomically in order. Read forms_get first for " +
+        "item indexes. include_form_in_response returns the updated form. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          form_id: { type: "string" as const, description: "Form ID" },
+          requests: {
+            type: "array" as const,
+            description: "Forms API Request objects.",
+            items: { type: "object" as const },
+          },
+          include_form_in_response: { type: "boolean" as const, description: "Return the updated form (default false)" },
+        },
+        required: ["account", "form_id", "requests"],
+      },
+      handler: async (args: {
+        account: string;
+        form_id: string;
+        requests: Record<string, unknown>[];
+        include_form_in_response?: boolean;
+      }) =>
+        withScope(args.account, [SCOPE.drive, SCOPE.formsBody], scopes, async () => {
+          if (!args.requests || args.requests.length === 0) {
+            throw new Error("requests must contain at least one Forms API request");
+          }
+          const forms = await getClient(args.account);
+          const res = await forms.forms.batchUpdate({
+            formId: args.form_id,
+            requestBody: {
+              requests: args.requests,
+              ...(args.include_form_in_response ? { includeFormInResponse: true } : {}),
+            },
+          } as never);
+          return asText(res.data);
+        }),
+    },
+    {
+      name: "forms_get_response",
+
+      readOnly: true,
+      description:
+        "Read one response to a Google Form by response id (from forms_list_responses), with " +
+        "answers keyed by question title. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          form_id: { type: "string" as const, description: "Form ID" },
+          response_id: { type: "string" as const, description: "Response ID" },
+        },
+        required: ["account", "form_id", "response_id"],
+      },
+      handler: async (args: { account: string; form_id: string; response_id: string }) =>
+        withScope(args.account, [SCOPE.drive, SCOPE.driveReadonly, SCOPE.formsResponses, SCOPE.formsBody], scopes, async () => {
+          const forms = await getClient(args.account);
+          const form = (await forms.forms.get({ formId: args.form_id } as never)).data as forms_v1.Schema$Form;
+          const res = await forms.forms.responses.get({ formId: args.form_id, responseId: args.response_id } as never);
+          const [flat] = flattenResponses(form, [res.data as forms_v1.Schema$FormResponse]);
+          return asText({ formId: args.form_id, title: form.info?.title, response: flat });
+        }),
+    },
   ];
 }
 

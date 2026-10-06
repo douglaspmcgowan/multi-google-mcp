@@ -11,6 +11,7 @@ import { chatTools } from "../src/tools/chat.js";
 import { formsTools } from "../src/tools/forms.js";
 import { tasksTools } from "../src/tools/tasks.js";
 import { contactsTools } from "../src/tools/contacts.js";
+import { meetTools } from "../src/tools/meet.js";
 import { filterTools } from "../src/tools/types.js";
 import { isReadOnlyMode } from "../src/config.js";
 
@@ -26,11 +27,14 @@ const all = [
   ...formsTools,
   ...tasksTools,
   ...contactsTools,
+  ...meetTools,
 ];
 
 const EXPECTED_WRITES = [
   "gmail_send", "gmail_draft", "gmail_update_draft", "gmail_delete_draft", "gmail_download_attachment",
   "gmail_modify_labels", "gmail_archive", "gmail_mark_read",
+  "gmail_trash", "gmail_untrash", "gmail_send_draft", "gmail_create_label", "gmail_update_label", "gmail_delete_label",
+  "gmail_create_filter", "gmail_delete_filter", "gmail_set_vacation", "gmail_update_signature",
   "calendar_create_event", "calendar_update_event", "calendar_rsvp", "calendar_delete_event",
   "drive_download", "drive_export", "drive_share", "drive_unshare", "drive_create", "drive_update_content",
   "drive_upload", "drive_rename", "drive_move", "drive_copy", "drive_trash", "drive_untrash",
@@ -38,8 +42,21 @@ const EXPECTED_WRITES = [
   "docs_delete_tab", "docs_write_tab", "docs_write_markdown", "docs_append_to_tab", "docs_replace_text",
   "docs_batch_update", "sheets_write_range", "sheets_append_rows", "sheets_batch_update",
   "slides_replace_text", "slides_add_from_outline", "slides_batch_update",
-  "chat_post_message", "chat_add_members", "forms_create",
+  "chat_post_message", "chat_add_members", "chat_create_space", "chat_create_group_chat", "chat_find_or_create_dm",
+  "chat_update_space", "chat_update_message", "chat_delete_message", "chat_upload_attachment", "chat_remove_member",
+  "chat_update_member_role", "chat_add_reaction", "chat_remove_reaction", "forms_create",
   "tasks_create", "tasks_update", "tasks_complete",
+  "tasks_delete", "tasks_move", "tasks_clear_completed", "tasks_create_list", "tasks_rename_list", "tasks_delete_list",
+  "contacts_create", "contacts_update", "contacts_delete", "contacts_create_group", "contacts_add_to_group",
+  "contacts_remove_from_group", "contacts_copy_other_to_my_contacts",
+  "calendar_quick_add", "calendar_move_event", "calendar_create_calendar", "calendar_update_calendar",
+  "calendar_delete_calendar", "calendar_share_calendar", "calendar_unshare_calendar",
+  "meet_create_space", "meet_update_space", "meet_end_active_conference",
+  "drive_download_revision", "drive_update_permission", "drive_transfer_ownership", "drive_set_link_sharing",
+  "drive_star", "drive_update_metadata", "forms_add_questions", "forms_batch_update",
+  "sheets_clear_range", "sheets_create", "sheets_add_tab", "sheets_rename_tab", "sheets_delete_tab",
+  "slides_save_thumbnail", "slides_delete_slide", "slides_duplicate_slide", "slides_reorder_slides",
+  "slides_insert_image", "slides_set_speaker_notes", "docs_reopen_comment", "docs_delete_comment",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {

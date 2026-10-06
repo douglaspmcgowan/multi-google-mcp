@@ -25,6 +25,8 @@ function accountDescription(getAccounts: () => string[]): string {
 }
 
 const fileFields = "id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents";
+const folderFields = "id,name,mimeType,modifiedTime,size,starred,owners(displayName,emailAddress),webViewLink,parents";
+const revisionFields = "id,mimeType,modifiedTime,lastModifyingUser(displayName,emailAddress),size,keepForever,published,exportLinks";
 const permissionFields = "permissions(id,type,emailAddress,displayName,role,allowFileDiscovery,expirationTime)";
 
 /**
@@ -99,7 +101,9 @@ export function createDriveTools(
           q: args.query,
           pageSize: args.max_results || 10,
           fields: `files(${fileFields})`,
-        });
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        } as never);
         return asText(res.data.files || []);
       },
     },
@@ -214,7 +218,7 @@ export function createDriveTools(
       },
       handler: async (args: { account: string; file_id: string }) => {
         const drive = await getClient(args.account);
-        const res = await drive.files.get({ fileId: args.file_id, fields: fileFields });
+        const res = await drive.files.get({ fileId: args.file_id, fields: fileFields, supportsAllDrives: true } as never);
         return asText(res.data);
       },
     },
@@ -230,7 +234,7 @@ export function createDriveTools(
       },
       handler: async (args: { account: string; file_id: string }) => {
         const drive = await getClient(args.account);
-        const res = await drive.permissions.list({ fileId: args.file_id, fields: permissionFields });
+        const res = await drive.permissions.list({ fileId: args.file_id, fields: permissionFields, supportsAllDrives: true } as never);
         return asText(res.data.permissions || []);
       },
     },
@@ -384,7 +388,7 @@ export function createDriveTools(
       },
       handler: async (args: { account: string; file_id: string; permission_id: string }) => {
         const drive = await getClient(args.account);
-        await drive.permissions.delete({ fileId: args.file_id, permissionId: args.permission_id });
+        await drive.permissions.delete({ fileId: args.file_id, permissionId: args.permission_id, supportsAllDrives: true } as never);
         return asText({ fileId: args.file_id, permissionId: args.permission_id, removed: true });
       },
     },
@@ -598,7 +602,7 @@ export function createDriveTools(
       },
       handler: async (args: { account: string; file_id: string; parent_id: string }) => {
         const drive = await getClient(args.account);
-        const current = await drive.files.get({ fileId: args.file_id, fields: "parents" });
+        const current = await drive.files.get({ fileId: args.file_id, fields: "parents", supportsAllDrives: true } as never);
         const previous = (current.data.parents || []).join(",");
         const res = await drive.files.update({
           fileId: args.file_id,
@@ -679,6 +683,424 @@ export function createDriveTools(
           requestBody: { trashed: false },
           fields: fileFields,
           supportsAllDrives: true,
+        } as never);
+        return asText(res.data);
+      },
+    },
+    {
+      name: "drive_list_folder",
+
+      readOnly: true,
+      description:
+        "List the direct children of a Drive folder, one page per call: id, name, mimeType, " +
+        "modifiedTime, size, starred, owners, webViewLink. Pass the returned nextPageToken back as " +
+        "page_token for the next page. Works in shared drives. Use drive_search for queries and " +
+        `drive_list_recent for changes since a date. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          folder_id: { type: "string", description: "Folder ID ('root' for My Drive root)" },
+          page_size: { type: "number", description: "Items per page (default 100, max 1000)" },
+          page_token: { type: "string", description: "nextPageToken from the previous page" },
+          order_by: { type: "string", description: "Drive orderBy, e.g. 'folder,name' (default) or 'modifiedTime desc'" },
+          include_trashed: { type: "boolean", description: "Include trashed children (default false)" },
+        },
+        required: ["account", "folder_id"],
+      },
+      handler: async (args: {
+        account: string;
+        folder_id: string;
+        page_size?: number;
+        page_token?: string;
+        order_by?: string;
+        include_trashed?: boolean;
+      }) => {
+        const drive = await getClient(args.account);
+        const escaped = args.folder_id.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+        const res = await drive.files.list({
+          q: `'${escaped}' in parents${args.include_trashed ? "" : " and trashed = false"}`,
+          pageSize: Math.min(1000, args.page_size ?? 100),
+          ...(args.page_token ? { pageToken: args.page_token } : {}),
+          orderBy: args.order_by ?? "folder,name",
+          fields: `nextPageToken,files(${folderFields})`,
+          supportsAllDrives: true,
+          includeItemsFromAllDrives: true,
+        } as never);
+        const data = res.data as drive_v3.Schema$FileList;
+        return asText({
+          folderId: args.folder_id,
+          count: (data.files ?? []).length,
+          nextPageToken: data.nextPageToken ?? null,
+          files: data.files ?? [],
+        });
+      },
+    },
+    {
+      name: "drive_list_shared_drives",
+
+      readOnly: true,
+      description:
+        "List the shared drives (team drives) the account can see: id, name, createdTime, hidden. " +
+        "Use a shared drive's id as a folder_id for drive_list_folder or as a parent_id. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          page_size: { type: "number", description: "Items per page (default 100, max 100)" },
+          page_token: { type: "string", description: "nextPageToken from the previous page" },
+          query: { type: "string", description: "Optional drives query, e.g. name contains 'Lab'" },
+        },
+        required: ["account"],
+      },
+      handler: async (args: { account: string; page_size?: number; page_token?: string; query?: string }) => {
+        const drive = await getClient(args.account);
+        const res = await drive.drives.list({
+          pageSize: Math.min(100, args.page_size ?? 100),
+          ...(args.page_token ? { pageToken: args.page_token } : {}),
+          ...(args.query ? { q: args.query } : {}),
+          fields: "nextPageToken,drives(id,name,createdTime,hidden)",
+        } as never);
+        const data = res.data as drive_v3.Schema$DriveList;
+        return asText({ count: (data.drives ?? []).length, nextPageToken: data.nextPageToken ?? null, drives: data.drives ?? [] });
+      },
+    },
+    {
+      name: "drive_list_revisions",
+
+      readOnly: true,
+      description:
+        "List a file's saved revisions (version history), oldest first: id, modifiedTime, " +
+        "lastModifyingUser, size, keepForever, exportLinks. Google-native files (Docs, Sheets, " +
+        "Slides) list revisions but their content is only reachable through exportLinks; " +
+        "drive_download_revision works on binary files. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          page_size: { type: "number", description: "Revisions per page (default 200, max 1000)" },
+          page_token: { type: "string", description: "nextPageToken from the previous page" },
+        },
+        required: ["account", "file_id"],
+      },
+      handler: async (args: { account: string; file_id: string; page_size?: number; page_token?: string }) => {
+        const drive = await getClient(args.account);
+        const res = await drive.revisions.list({
+          fileId: args.file_id,
+          pageSize: Math.min(1000, args.page_size ?? 200),
+          ...(args.page_token ? { pageToken: args.page_token } : {}),
+          fields: `nextPageToken,revisions(${revisionFields})`,
+        } as never);
+        const data = res.data as drive_v3.Schema$RevisionList;
+        return asText({
+          fileId: args.file_id,
+          count: (data.revisions ?? []).length,
+          nextPageToken: data.nextPageToken ?? null,
+          revisions: data.revisions ?? [],
+        });
+      },
+    },
+    {
+      name: "drive_download_revision",
+
+      readOnly: false,
+      description:
+        "Download one revision of a binary Drive file (PDF, image, uploaded Office file) to disk. " +
+        "Get the revision id from drive_list_revisions. Not available for Google-native files, " +
+        "which only expose exportLinks. Writes a local file, so it is a write tool. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          revision_id: { type: "string", description: "Revision ID from drive_list_revisions" },
+          destination_path: { type: "string", description: "Destination path on disk" },
+        },
+        required: ["account", "file_id", "revision_id", "destination_path"],
+      },
+      handler: async (args: { account: string; file_id: string; revision_id: string; destination_path: string }) => {
+        const drive = await getClient(args.account);
+        fs.mkdirSync(path.dirname(args.destination_path), { recursive: true });
+        const res = await drive.revisions.get(
+          { fileId: args.file_id, revisionId: args.revision_id, alt: "media" } as never,
+          { responseType: "stream" }
+        );
+        await pipeline(res.data as unknown as Readable, fs.createWriteStream(args.destination_path));
+        const byteCount = fs.statSync(args.destination_path).size;
+        return asText({ path: args.destination_path, byteCount, revisionId: args.revision_id });
+      },
+    },
+    {
+      name: "drive_update_permission",
+
+      readOnly: false,
+      description:
+        "Change an existing permission in place: a new role (reader, commenter, writer, " +
+        "fileOrganizer, organizer) and/or an expiration time (ISO 8601; expiry applies to user " +
+        "and group permissions). Get the permission id from drive_get_permissions. To hand over " +
+        `ownership use drive_transfer_ownership. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          permission_id: { type: "string", description: "Permission ID from drive_get_permissions" },
+          role: { type: "string", description: "New role: reader, commenter, writer, fileOrganizer or organizer" },
+          expiration_time: { type: "string", description: "ISO 8601 expiry; omit to leave unchanged" },
+        },
+        required: ["account", "file_id", "permission_id"],
+      },
+      handler: async (args: {
+        account: string;
+        file_id: string;
+        permission_id: string;
+        role?: string;
+        expiration_time?: string;
+      }) => {
+        const roles = ["reader", "commenter", "writer", "fileOrganizer", "organizer"];
+        if (args.role !== undefined && !roles.includes(args.role)) throw new Error(`role must be one of ${roles.join(", ")}`);
+        if (args.role === undefined && args.expiration_time === undefined) {
+          throw new Error("drive_update_permission needs role or expiration_time");
+        }
+        const drive = await getClient(args.account);
+        const res = await drive.permissions.update({
+          fileId: args.file_id,
+          permissionId: args.permission_id,
+          requestBody: {
+            ...(args.role ? { role: args.role } : {}),
+            ...(args.expiration_time ? { expirationTime: args.expiration_time } : {}),
+          },
+          fields: "id,type,emailAddress,role,expirationTime,pendingOwner",
+          supportsAllDrives: true,
+        } as never);
+        return asText(res.data);
+      },
+    },
+    {
+      name: "drive_transfer_ownership",
+
+      readOnly: false,
+      description:
+        "Hand ownership of a My Drive file to another user. mode=direct sets role owner with " +
+        "transferOwnership: it works inside one Google Workspace domain. mode=pending marks the " +
+        "user as pending owner (role writer, pendingOwner): required for consumer accounts " +
+        "(gmail.com), and the recipient must then accept in Drive before ownership moves. " +
+        "mode=auto (default) uses pending for gmail.com/googlemail.com addresses and direct " +
+        "otherwise. Shared-drive items have no owner and cannot be transferred. Creates the " +
+        "permission first when the user has none. Hard to undo: the new owner controls the file. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          email: { type: "string", description: "New owner's email address" },
+          mode: { type: "string", description: "auto (default), direct or pending" },
+        },
+        required: ["account", "file_id", "email"],
+      },
+      handler: async (args: { account: string; file_id: string; email: string; mode?: string }) => {
+        const email = args.email.trim();
+        if (!email) throw new Error("email is required");
+        const requested = args.mode ?? "auto";
+        if (!["auto", "direct", "pending"].includes(requested)) throw new Error("mode must be auto, direct or pending");
+        const mode =
+          requested === "auto" ? (/@(gmail|googlemail)\.com$/i.test(email) ? "pending" : "direct") : requested;
+        const drive = await getClient(args.account);
+        const listed = await drive.permissions.list({
+          fileId: args.file_id,
+          fields: permissionFields,
+          supportsAllDrives: true,
+        } as never);
+        const existing = (listed.data.permissions ?? []).find(
+          (p) => p.emailAddress?.toLowerCase() === email.toLowerCase()
+        );
+        const body = mode === "direct" ? { role: "owner" } : { role: "writer", pendingOwner: true };
+        const fields = "id,type,emailAddress,role,pendingOwner";
+        let res;
+        if (existing?.id) {
+          res = await drive.permissions.update({
+            fileId: args.file_id,
+            permissionId: existing.id,
+            ...(mode === "direct" ? { transferOwnership: true } : {}),
+            requestBody: body,
+            fields,
+            supportsAllDrives: true,
+          } as never);
+        } else {
+          res = await drive.permissions.create({
+            fileId: args.file_id,
+            ...(mode === "direct" ? { transferOwnership: true } : {}),
+            sendNotificationEmail: true,
+            requestBody: { type: "user", emailAddress: email, ...body },
+            fields,
+            supportsAllDrives: true,
+          } as never);
+        }
+        return asText({ fileId: args.file_id, email, mode, permission: res.data });
+      },
+    },
+    {
+      name: "drive_set_link_sharing",
+
+      readOnly: false,
+      description:
+        "Turn link sharing on or off for a file or folder. access=anyone: anyone with the link; " +
+        "access=domain (needs domain): anyone in that Workspace domain with the link; access=off " +
+        "removes the anyone/domain permission. role is reader (default), commenter or writer. " +
+        "allow_file_discovery=true makes it findable in search, not just by link. Updates the " +
+        "existing link permission when there is one. Individual shares are untouched. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          access: { type: "string", description: "anyone, domain or off" },
+          role: { type: "string", description: "reader (default), commenter or writer" },
+          domain: { type: "string", description: "Workspace domain, required for access=domain" },
+          allow_file_discovery: { type: "boolean", description: "Make it discoverable in search (default false)" },
+        },
+        required: ["account", "file_id", "access"],
+      },
+      handler: async (args: {
+        account: string;
+        file_id: string;
+        access: string;
+        role?: string;
+        domain?: string;
+        allow_file_discovery?: boolean;
+      }) => {
+        if (!["anyone", "domain", "off"].includes(args.access)) throw new Error("access must be anyone, domain or off");
+        const role = args.role ?? "reader";
+        if (!["reader", "commenter", "writer"].includes(role)) throw new Error("role must be reader, commenter or writer");
+        if (args.access === "domain" && !args.domain) throw new Error("access=domain needs domain");
+        const drive = await getClient(args.account);
+        const listed = await drive.permissions.list({
+          fileId: args.file_id,
+          fields: permissionFields,
+          supportsAllDrives: true,
+        } as never);
+        const links = (listed.data.permissions ?? []).filter((p) => p.type === "anyone" || p.type === "domain");
+        if (args.access === "off") {
+          for (const link of links) {
+            await drive.permissions.delete({ fileId: args.file_id, permissionId: link.id!, supportsAllDrives: true } as never);
+          }
+          return asText({ fileId: args.file_id, access: "off", removed: links.map((l) => l.id) });
+        }
+        const sameType = links.find((p) => p.type === args.access);
+        let res;
+        if (sameType?.id) {
+          res = await drive.permissions.update({
+            fileId: args.file_id,
+            permissionId: sameType.id,
+            requestBody: { role },
+            fields: "id,type,role,domain,allowFileDiscovery",
+            supportsAllDrives: true,
+          } as never);
+        } else {
+          res = await drive.permissions.create({
+            fileId: args.file_id,
+            requestBody: {
+              type: args.access,
+              role,
+              allowFileDiscovery: args.allow_file_discovery === true,
+              ...(args.access === "domain" ? { domain: args.domain } : {}),
+            },
+            fields: "id,type,role,domain,allowFileDiscovery",
+            supportsAllDrives: true,
+          } as never);
+        }
+        return asText({ fileId: args.file_id, access: args.access, permission: res.data });
+      },
+    },
+    {
+      name: "drive_star",
+
+      readOnly: false,
+      description: `Star or unstar a Drive file or folder (starred=false unstars). ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          starred: { type: "boolean", description: "true to star, false to unstar" },
+        },
+        required: ["account", "file_id", "starred"],
+      },
+      handler: async (args: { account: string; file_id: string; starred: boolean }) => {
+        const drive = await getClient(args.account);
+        const res = await drive.files.update({
+          fileId: args.file_id,
+          requestBody: { starred: !!args.starred },
+          fields: `${fileFields},starred`,
+          supportsAllDrives: true,
+        } as never);
+        return asText(res.data);
+      },
+    },
+    {
+      name: "drive_update_metadata",
+
+      readOnly: false,
+      description:
+        "Update a file's description and/or custom properties without touching its content. " +
+        "properties is a string-to-string map merged into the file's existing properties; a null " +
+        "value deletes that key. Pass an empty description to clear it. Use drive_rename for the " +
+        `name. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          description: { type: "string", description: "New description (empty string clears it)" },
+          properties: { type: "object", description: "Custom key/value properties to merge (null value deletes a key)" },
+        },
+        required: ["account", "file_id"],
+      },
+      handler: async (args: {
+        account: string;
+        file_id: string;
+        description?: string;
+        properties?: Record<string, string | null>;
+      }) => {
+        if (args.description === undefined && !args.properties) {
+          throw new Error("drive_update_metadata needs description or properties");
+        }
+        const drive = await getClient(args.account);
+        const res = await drive.files.update({
+          fileId: args.file_id,
+          requestBody: {
+            ...(args.description !== undefined ? { description: args.description } : {}),
+            ...(args.properties ? { properties: args.properties } : {}),
+          },
+          fields: `${fileFields},properties`,
+          supportsAllDrives: true,
+        } as never);
+        return asText(res.data);
+      },
+    },
+    {
+      name: "drive_get_storage_quota",
+
+      readOnly: true,
+      description:
+        "Storage quota and usage for the account (bytes): limit, usage, usageInDrive, " +
+        "usageInDriveTrash, plus the signed-in user. limit is absent for unlimited plans. " +
+        `${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: { account },
+        required: ["account"],
+      },
+      handler: async (args: { account: string }) => {
+        const drive = await getClient(args.account);
+        const res = await drive.about.get({
+          fields: "storageQuota(limit,usage,usageInDrive,usageInDriveTrash),user(displayName,emailAddress)",
         } as never);
         return asText(res.data);
       },

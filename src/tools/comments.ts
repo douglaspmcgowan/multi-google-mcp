@@ -177,6 +177,56 @@ export function createCommentTools(
         return asText({ fileId: args.file_id, commentId: args.comment_id, action, reply: res.data });
       },
     },
+    {
+      name: "docs_reopen_comment",
+
+      readOnly: false,
+      description:
+        "Reopen a resolved comment (posts a reply with action=reopen, optionally with text). " +
+        `Same as docs_resolve_comment with reopen=true. ${accountDescription(getAccounts)}`,
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          file_id: fileId,
+          comment_id: commentId,
+          content: { type: "string" as const, description: "Optional note posted with the reopen" },
+        },
+        required: ["account", "file_id", "comment_id"],
+      },
+      handler: async (args: { account: string; file_id: string; comment_id: string; content?: string }) => {
+        const drive = await getClient(args.account);
+        const requestBody: Record<string, unknown> = { action: "reopen" };
+        if (args.content) requestBody.content = args.content;
+        const res = await drive.replies.create({
+          fileId: args.file_id,
+          commentId: args.comment_id,
+          fields: REPLY_FIELDS,
+          requestBody,
+        } as never);
+        return asText({ fileId: args.file_id, commentId: args.comment_id, action: "reopen", reply: res.data });
+      },
+    },
+    {
+      name: "docs_delete_comment",
+
+      readOnly: false,
+      description:
+        "Delete a comment and its replies from a Google Doc (or any Drive file). Destructive and " +
+        "not recoverable through the API; docs_resolve_comment hides a comment without deleting " +
+        "it. Only the comment's author (or the file owner) can delete it. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: { account, file_id: fileId, comment_id: commentId },
+        required: ["account", "file_id", "comment_id"],
+      },
+      handler: async (args: { account: string; file_id: string; comment_id: string }) => {
+        const drive = await getClient(args.account);
+        await drive.comments.delete({ fileId: args.file_id, commentId: args.comment_id } as never);
+        return asText({ fileId: args.file_id, commentId: args.comment_id, deleted: true });
+      },
+    },
   ];
 }
 
