@@ -1,4 +1,6 @@
 import { getAuthenticatedClient } from "../auth.js";
+import { readFileSync } from "node:fs";
+import { basename, isAbsolute } from "node:path";
 import { getAccountNames } from "../config.js";
 
 async function getGmail(account: string) {
@@ -104,6 +106,191 @@ export function extractGmailBody(payload: any): ExtractedGmailBody {
 
   walk(payload);
   return { plain, html, attachments };
+}
+
+export interface DraftMimeAttachment {
+  filename: string;
+  mimeType: string;
+  data: Buffer;
+}
+
+export interface DraftMimeInput {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string;
+  bcc?: string;
+  inReplyTo?: string;
+  references?: string;
+  forward?: { from: string; date: string; subject: string; to: string; text: string };
+  attachments?: DraftMimeAttachment[];
+}
+
+const CRLF = "\r\n";
+
+/** RFC 2047 encoded-word for header values containing non-ASCII characters. */
+export function encodeHeaderValue(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  // Split on code points so no multi-byte character is cut; keep each word under 75 chars.
+  const words: string[] = [];
+  let current = "";
+  for (const ch of value) {
+    if (Buffer.byteLength(current + ch, "utf-8") > 42) {
+      words.push(current);
+      current = "";
+    }
+    current += ch;
+  }
+  if (current) words.push(current);
+  return words.map((w) => `=?UTF-8?B?${Buffer.from(w, "utf-8").toString("base64")}?=`).join(" ");
+}
+
+function wrap76(b64: string): string {
+  return (b64.match(/.{1,76}/g) || []).join(CRLF);
+}
+
+function toCrlf(text: string): string {
+  return text.replace(/\r\n|\r|\n/g, CRLF);
+}
+
+/** Build an RFC 5322 message for drafts: plain text, optional forwarded block and attachments. Pure; no network. */
+export function buildDraftMime(input: DraftMimeInput): string {
+  let text = input.body;
+  if (input.forward) {
+    const f = input.forward;
+    text +=
+      `\n\n---------- Forwarded message ---------\nFrom: ${f.from}\nDate: ${f.date}\n` +
+      `Subject: ${f.subject}\nTo: ${f.to}\n\n${f.text}`;
+  }
+  const headers: string[] = [`To: ${input.to}`];
+  if (input.cc) headers.push(`Cc: ${input.cc}`);
+  if (input.bcc) headers.push(`Bcc: ${input.bcc}`);
+  headers.push(`Subject: ${encodeHeaderValue(input.subject)}`);
+  if (input.inReplyTo) headers.push(`In-Reply-To: ${input.inReplyTo}`);
+  if (input.references) headers.push(`References: ${input.references}`);
+  headers.push("MIME-Version: 1.0");
+
+  const textPart = (): string[] => [
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    wrap76(Buffer.from(toCrlf(text), "utf-8").toString("base64")),
+  ];
+
+  const attachments = input.attachments || [];
+  if (attachments.length === 0) {
+    return [...headers, ...textPart()].join(CRLF) + CRLF;
+  }
+
+  const boundary = `=_multi_google_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const lines = [...headers, `Content-Type: multipart/mixed; boundary="${boundary}"`, "", `--${boundary}`, ...textPart()];
+  for (const a of attachments) {
+    const name = encodeHeaderValue(a.filename).replace(/"/g, "'");
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${a.mimeType || "application/octet-stream"}; name="${name}"`,
+      `Content-Disposition: attachment; filename="${name}"`,
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrap76(a.data.toString("base64"))
+    );
+  }
+  lines.push(`--${boundary}--`);
+  return lines.join(CRLF) + CRLF;
+}
+
+export interface CreateDraftArgs {
+  to: string;
+  subject: string;
+  body: string;
+  cc?: string;
+  bcc?: string;
+  reply_to_message_id?: string;
+  forward_message_id?: string;
+  attachment_paths?: string[];
+}
+
+/** Create a draft through an injected Gmail client (seam for tests). Returns draft id and thread id. */
+export async function createDraft(
+  gmail: any,
+  args: CreateDraftArgs,
+  readLocalFile: (path: string) => Buffer = (p) => readFileSync(p)
+): Promise<{ draftId: string | null | undefined; threadId: string | null | undefined }> {
+  if (args.reply_to_message_id && args.forward_message_id) {
+    throw new Error("Provide only one of reply_to_message_id and forward_message_id.");
+  }
+  const input: DraftMimeInput = {
+    to: args.to,
+    subject: args.subject,
+    body: args.body,
+    cc: args.cc,
+    bcc: args.bcc,
+    attachments: [],
+  };
+  let threadId: string | undefined;
+
+  if (args.reply_to_message_id) {
+    const orig = await gmail.users.messages.get({
+      userId: "me",
+      id: args.reply_to_message_id,
+      format: "metadata",
+      metadataHeaders: ["Message-ID", "References"],
+    });
+    const hs = orig.data.payload?.headers || [];
+    const get = (n: string) => hs.find((h: any) => String(h.name).toLowerCase() === n.toLowerCase())?.value || "";
+    const messageId = get("Message-ID");
+    const refs = get("References");
+    if (messageId) {
+      input.inReplyTo = messageId;
+      input.references = refs ? `${refs} ${messageId}` : messageId;
+    } else if (refs) {
+      input.references = refs;
+    }
+    threadId = orig.data.threadId || undefined;
+  }
+
+  if (args.forward_message_id) {
+    const orig = await gmail.users.messages.get({ userId: "me", id: args.forward_message_id, format: "full" });
+    const hs = orig.data.payload?.headers || [];
+    const get = (n: string) => hs.find((h: any) => String(h.name).toLowerCase() === n.toLowerCase())?.value || "";
+    const { plain, html, attachments } = orig.data.payload
+      ? extractGmailBody(orig.data.payload)
+      : { plain: "", html: "", attachments: [] as GmailAttachment[] };
+    input.forward = {
+      from: get("From"),
+      date: get("Date"),
+      subject: get("Subject"),
+      to: get("To"),
+      text: plain || (html ? htmlToText(html) : orig.data.snippet || ""),
+    };
+    for (const att of attachments) {
+      const res = await gmail.users.messages.attachments.get({
+        userId: "me",
+        messageId: args.forward_message_id,
+        id: att.attachmentId,
+      });
+      input.attachments!.push({
+        filename: att.filename,
+        mimeType: att.mimeType,
+        data: Buffer.from(res.data.data || "", "base64url"),
+      });
+    }
+  }
+
+  for (const path of args.attachment_paths || []) {
+    if (!isAbsolute(path)) throw new Error(`attachment_paths entries must be absolute paths: ${path}`);
+    input.attachments!.push({
+      filename: basename(path),
+      mimeType: "application/octet-stream",
+      data: readLocalFile(path),
+    });
+  }
+
+  const raw = Buffer.from(buildDraftMime(input), "utf-8").toString("base64url");
+  const message: Record<string, string> = { raw };
+  if (threadId) message.threadId = threadId;
+  const res = await gmail.users.drafts.create({ userId: "me", requestBody: { message } });
+  return { draftId: res.data.id, threadId: res.data.message?.threadId || threadId };
 }
 
 export const gmailTools = [
@@ -245,7 +432,7 @@ export const gmailTools = [
   },
   {
     name: "gmail_draft",
-    description: `Create a draft email in a specific Google account. ${accountDescription()}`,
+    description: `Create a draft email in a specific Google account. Optionally thread it as a reply (reply_to_message_id), make it a forward with the original attachments (forward_message_id), or attach local files. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -253,23 +440,29 @@ export const gmailTools = [
         to: { type: "string", description: "Recipient email address" },
         subject: { type: "string", description: "Email subject" },
         body: { type: "string", description: "Email body (plain text)" },
+        cc: { type: "string", description: "CC recipients (comma-separated)" },
+        bcc: { type: "string", description: "BCC recipients (comma-separated)" },
+        reply_to_message_id: {
+          type: "string",
+          description: "Gmail message ID (same account) to reply to; the draft lands in that thread with In-Reply-To and References set",
+        },
+        forward_message_id: {
+          type: "string",
+          description: "Gmail message ID (same account) to forward; adds a forwarded-message block and re-attaches the original attachments. Not threaded.",
+        },
+        attachment_paths: {
+          type: "array",
+          items: { type: "string" },
+          description: "Absolute local file paths to attach",
+        },
       },
       required: ["account", "to", "subject", "body"],
     },
-    handler: async (args: { account: string; to: string; subject: string; body: string }) => {
+    handler: async (args: { account: string } & CreateDraftArgs) => {
       const gmail = await getGmail(args.account);
-
-      const raw = Buffer.from(
-        `To: ${args.to}\nSubject: ${args.subject}\nContent-Type: text/plain; charset=utf-8\n\n${args.body}`
-      ).toString("base64url");
-
-      const res = await gmail.users.drafts.create({
-        userId: "me",
-        requestBody: { message: { raw } },
-      });
-
+      const { draftId, threadId } = await createDraft(gmail, args);
       return {
-        content: [{ type: "text" as const, text: `Draft created. Draft ID: ${res.data.id}` }],
+        content: [{ type: "text" as const, text: `Draft created. Draft ID: ${draftId}. Thread ID: ${threadId ?? "none"}` }],
       };
     },
   },
