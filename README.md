@@ -24,6 +24,13 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_modify_labels` — add or remove labels (by name or id) on messages or a thread; `gmail_archive` and `gmail_mark_read` are thin wrappers. There is no message trash or delete tool.
 - `gmail_read_thread` — every message in a thread with plain-text bodies
 - `gmail_search_all` — search all (or chosen) accounts at once, grouped by account; one failing account does not fail the rest
+- `gmail_trash`, `gmail_untrash` — move messages or threads to Trash and back (recoverable; there is still no permanent delete)
+- `gmail_send_draft` — send an existing draft immediately
+- `gmail_create_label`, `gmail_update_label`, `gmail_delete_label` — manage labels (name, visibility, colour)
+- `gmail_list_filters`, `gmail_create_filter`, `gmail_delete_filter` — standing filters (`gmail.settings.basic`; no forwarding)
+- `gmail_get_vacation`, `gmail_set_vacation` — auto-reply; `gmail_list_send_as`, `gmail_update_signature` — signatures
+- `gmail_get_profile`, `gmail_list_history` — address, totals, historyId and recent mailbox changes
+- Star, mark important and batch label changes need no extra tool: use `gmail_modify_labels` with `STARRED` / `IMPORTANT` and many `message_ids`.
 
 **Tasks** (Google Tasks; needs the `tasks` scope)
 - `tasks_list_lists`, `tasks_list`, `tasks_create`, `tasks_update`, `tasks_complete` (`completed: false` reopens). No delete tool.

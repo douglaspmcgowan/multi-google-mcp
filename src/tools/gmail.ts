@@ -3,6 +3,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join } from "node:path";
 import { getAccountNames } from "../config.js";
 import type { ToolDef } from "./types.js";
+import { SCOPE, grantedScopes, withScope, type ScopeLookup } from "../scopes.js";
 
 async function getGmail(account: string) {
   const { gmail } = await import("@googleapis/gmail");
@@ -523,7 +524,7 @@ const draftProps = {
   attachment_paths: { type: "array", items: { type: "string" }, description: "Absolute local file paths to attach" },
 };
 
-export const gmailTools: ToolDef[] = [
+const baseGmailTools: ToolDef[] = [
   {
     name: "gmail_list_drafts",
     readOnly: true,
@@ -871,3 +872,435 @@ export const gmailTools: ToolDef[] = [
     },
   },
 ];
+
+const GMAIL = "https://www.googleapis.com/auth/";
+const GMAIL_COMPOSE = `${GMAIL}gmail.compose`;
+const GMAIL_LABELS = `${GMAIL}gmail.labels`;
+const GMAIL_SETTINGS_BASIC = `${GMAIL}gmail.settings.basic`;
+
+const NEEDS = {
+  modify: [SCOPE.gmailModify],
+  send: [SCOPE.gmailModify, GMAIL_COMPOSE],
+  labels: [SCOPE.gmailModify, GMAIL_LABELS],
+  settings: [GMAIL_SETTINGS_BASIC],
+  read: [SCOPE.gmailReadonly, SCOPE.gmailModify],
+};
+
+const LABEL_LIST_VISIBILITY = ["labelShow", "labelShowIfUnread", "labelHide"];
+const MESSAGE_LIST_VISIBILITY = ["show", "hide"];
+
+function ids(value: unknown, what: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string" || v === "")) {
+    throw new Error(`${what} must be an array of non-empty id strings.`);
+  }
+  return value as string[];
+}
+
+/** Move messages and/or threads to Trash, or restore them. Recoverable for 30 days; never permanent. */
+export async function setTrashed(
+  gmail: any,
+  args: { message_ids?: string[]; thread_ids?: string[] },
+  trashed: boolean
+) {
+  const messageIds = ids(args.message_ids, "message_ids");
+  const threadIds = ids(args.thread_ids, "thread_ids");
+  if (messageIds.length === 0 && threadIds.length === 0) {
+    throw new Error("Provide message_ids and/or thread_ids.");
+  }
+  for (const id of messageIds) {
+    await (trashed ? gmail.users.messages.trash({ userId: "me", id }) : gmail.users.messages.untrash({ userId: "me", id }));
+  }
+  for (const id of threadIds) {
+    await (trashed ? gmail.users.threads.trash({ userId: "me", id }) : gmail.users.threads.untrash({ userId: "me", id }));
+  }
+  return { [trashed ? "trashed" : "untrashed"]: { messages: messageIds.length, threads: threadIds.length } };
+}
+
+export async function sendDraft(gmail: any, draftId: string) {
+  if (!draftId) throw new Error("draft_id is required.");
+  const res = await gmail.users.drafts.send({ userId: "me", requestBody: { id: draftId } });
+  return { sent: true, message_id: res.data?.id, thread_id: res.data?.threadId };
+}
+
+export interface LabelArgs {
+  name?: string;
+  label_list_visibility?: string;
+  message_list_visibility?: string;
+  text_color?: string;
+  background_color?: string;
+}
+
+function labelBody(args: LabelArgs, requireName: boolean) {
+  const body: any = {};
+  if (args.name !== undefined) body.name = args.name;
+  else if (requireName) throw new Error("name is required.");
+  if (args.label_list_visibility !== undefined) {
+    if (!LABEL_LIST_VISIBILITY.includes(args.label_list_visibility)) {
+      throw new Error(`label_list_visibility must be one of ${LABEL_LIST_VISIBILITY.join(", ")}.`);
+    }
+    body.labelListVisibility = args.label_list_visibility;
+  }
+  if (args.message_list_visibility !== undefined) {
+    if (!MESSAGE_LIST_VISIBILITY.includes(args.message_list_visibility)) {
+      throw new Error(`message_list_visibility must be one of ${MESSAGE_LIST_VISIBILITY.join(", ")}.`);
+    }
+    body.messageListVisibility = args.message_list_visibility;
+  }
+  if (args.text_color !== undefined || args.background_color !== undefined) {
+    if (!args.text_color || !args.background_color) throw new Error("Set text_color and background_color together.");
+    body.color = { textColor: args.text_color, backgroundColor: args.background_color };
+  }
+  return body;
+}
+
+export async function createLabel(gmail: any, args: LabelArgs) {
+  const res = await gmail.users.labels.create({ userId: "me", requestBody: labelBody(args, true) });
+  return res.data;
+}
+
+export async function updateLabel(gmail: any, args: LabelArgs & { label: string }) {
+  const [id] = await resolveLabelIds(gmail, [args.label]);
+  const requestBody = labelBody(args, false);
+  if (Object.keys(requestBody).length === 0) throw new Error("Provide at least one field to change.");
+  const res = await gmail.users.labels.patch({ userId: "me", id, requestBody });
+  return res.data;
+}
+
+/** Deletes the label only; Gmail leaves the messages in place. System labels are refused by Gmail. */
+export async function deleteLabel(gmail: any, label: string) {
+  const [id] = await resolveLabelIds(gmail, [label]);
+  await gmail.users.labels.delete({ userId: "me", id });
+  return { deleted_label: id };
+}
+
+export async function listFilters(gmail: any) {
+  const res = await gmail.users.settings.filters.list({ userId: "me" });
+  return res.data.filter || [];
+}
+
+export interface FilterArgs {
+  from?: string;
+  to?: string;
+  subject?: string;
+  query?: string;
+  negated_query?: string;
+  has_attachment?: boolean;
+  size?: number;
+  size_comparison?: "larger" | "smaller";
+  add_labels?: string[];
+  remove_labels?: string[];
+  mark_read?: boolean;
+  archive?: boolean;
+  star?: boolean;
+  mark_important?: boolean;
+  never_spam?: boolean;
+}
+
+/** Creates a standing rule applied to every future incoming message. Forwarding is not offered. */
+export async function createFilter(gmail: any, args: FilterArgs) {
+  const criteria: any = {};
+  if (args.from) criteria.from = args.from;
+  if (args.to) criteria.to = args.to;
+  if (args.subject) criteria.subject = args.subject;
+  if (args.query) criteria.query = args.query;
+  if (args.negated_query) criteria.negatedQuery = args.negated_query;
+  if (args.has_attachment !== undefined) criteria.hasAttachment = args.has_attachment;
+  if (args.size !== undefined) {
+    if (args.size_comparison !== "larger" && args.size_comparison !== "smaller") {
+      throw new Error('size needs size_comparison "larger" or "smaller".');
+    }
+    criteria.size = args.size;
+    criteria.sizeComparison = args.size_comparison;
+  }
+  if (Object.keys(criteria).length === 0) throw new Error("Provide at least one match criterion.");
+  const addLabelIds = await resolveLabelIds(gmail, args.add_labels || []);
+  const removeLabelIds = await resolveLabelIds(gmail, args.remove_labels || []);
+  if (args.star) addLabelIds.push("STARRED");
+  if (args.mark_important) addLabelIds.push("IMPORTANT");
+  if (args.mark_read) removeLabelIds.push("UNREAD");
+  if (args.archive) removeLabelIds.push("INBOX");
+  if (args.never_spam) removeLabelIds.push("SPAM");
+  if (addLabelIds.length === 0 && removeLabelIds.length === 0) throw new Error("Provide at least one action.");
+  const action: any = {};
+  if (addLabelIds.length) action.addLabelIds = addLabelIds;
+  if (removeLabelIds.length) action.removeLabelIds = removeLabelIds;
+  const res = await gmail.users.settings.filters.create({ userId: "me", requestBody: { criteria, action } });
+  return res.data;
+}
+
+export async function deleteFilter(gmail: any, filterId: string) {
+  if (!filterId) throw new Error("filter_id is required.");
+  await gmail.users.settings.filters.delete({ userId: "me", id: filterId });
+  return { deleted_filter: filterId };
+}
+
+export async function getVacation(gmail: any) {
+  const res = await gmail.users.settings.getVacation({ userId: "me" });
+  return res.data;
+}
+
+export interface VacationArgs {
+  enabled: boolean;
+  subject?: string;
+  body_text?: string;
+  body_html?: string;
+  restrict_to_contacts?: boolean;
+  restrict_to_domain?: boolean;
+  start_time?: string;
+  end_time?: string;
+}
+
+function epochMs(value: string, field: string): string {
+  const ms = /^\d+$/.test(value) ? Number(value) : Date.parse(value);
+  if (!Number.isFinite(ms)) throw new Error(`${field} must be an ISO date-time or epoch milliseconds.`);
+  return String(ms);
+}
+
+/** Full replace of the auto-reply settings (users.settings.updateVacation is a PUT). */
+export async function setVacation(gmail: any, args: VacationArgs) {
+  if (typeof args.enabled !== "boolean") throw new Error("enabled (true or false) is required.");
+  const requestBody: any = { enableAutoReply: args.enabled };
+  if (args.subject !== undefined) requestBody.responseSubject = args.subject;
+  if (args.body_text !== undefined) requestBody.responseBodyPlainText = args.body_text;
+  if (args.body_html !== undefined) requestBody.responseBodyHtml = args.body_html;
+  if (args.restrict_to_contacts !== undefined) requestBody.restrictToContacts = args.restrict_to_contacts;
+  if (args.restrict_to_domain !== undefined) requestBody.restrictToDomain = args.restrict_to_domain;
+  if (args.start_time !== undefined) requestBody.startTime = epochMs(args.start_time, "start_time");
+  if (args.end_time !== undefined) requestBody.endTime = epochMs(args.end_time, "end_time");
+  if (args.enabled && requestBody.responseBodyPlainText === undefined && requestBody.responseBodyHtml === undefined) {
+    throw new Error("Enabling auto-reply needs body_text or body_html.");
+  }
+  const res = await gmail.users.settings.updateVacation({ userId: "me", requestBody });
+  return res.data;
+}
+
+export async function listSendAs(gmail: any) {
+  const res = await gmail.users.settings.sendAs.list({ userId: "me" });
+  return (res.data.sendAs || []).map((s: any) => ({
+    sendAsEmail: s.sendAsEmail,
+    displayName: s.displayName,
+    isPrimary: !!s.isPrimary,
+    isDefault: !!s.isDefault,
+    verificationStatus: s.verificationStatus,
+    signature: s.signature,
+  }));
+}
+
+export async function updateSignature(gmail: any, args: { send_as_email: string; signature: string }) {
+  if (!args.send_as_email) throw new Error("send_as_email is required.");
+  if (typeof args.signature !== "string") throw new Error("signature is required (empty string clears it).");
+  const res = await gmail.users.settings.sendAs.patch({
+    userId: "me",
+    sendAsEmail: args.send_as_email,
+    requestBody: { signature: args.signature },
+  });
+  return { sendAsEmail: res.data?.sendAsEmail ?? args.send_as_email, signature: res.data?.signature ?? args.signature };
+}
+
+export async function getProfile(gmail: any) {
+  const res = await gmail.users.getProfile({ userId: "me" });
+  return res.data;
+}
+
+export interface HistoryArgs {
+  start_history_id: string;
+  history_types?: string[];
+  label_id?: string;
+  max_results?: number;
+  page_token?: string;
+}
+
+export async function listHistory(gmail: any, args: HistoryArgs) {
+  if (!args.start_history_id) throw new Error("start_history_id is required (from gmail_get_profile or a prior call).");
+  const res = await gmail.users.history.list({
+    userId: "me",
+    startHistoryId: args.start_history_id,
+    historyTypes: args.history_types,
+    labelId: args.label_id,
+    maxResults: args.max_results ?? 100,
+    pageToken: args.page_token,
+  });
+  return res.data;
+}
+
+const idList = (description: string) => ({ type: "array", items: { type: "string" }, description });
+const labelFields = {
+  label_list_visibility: { type: "string", enum: LABEL_LIST_VISIBILITY, description: "Show in the label list" },
+  message_list_visibility: { type: "string", enum: MESSAGE_LIST_VISIBILITY, description: "Show on messages in the message list" },
+  text_color: { type: "string", description: "Hex colour from Gmail's palette (e.g. #ffffff); set with background_color" },
+  background_color: { type: "string", description: "Hex colour from Gmail's palette (e.g. #16a766); set with text_color" },
+};
+
+/**
+ * Gmail tools beyond the original set. `getClient` and `scopes` are injectable
+ * so tests can pass a fake client and a fixed granted-scope list.
+ */
+export function createGmailExtraTools(
+  getClient: (account: string) => Promise<any> = getGmail,
+  scopes: ScopeLookup = grantedScopes
+): ToolDef[] {
+  const run = <T>(account: string, needs: string[], fn: (gmail: any) => Promise<T>) =>
+    withScope(account, needs, scopes, async () => text(await fn(await getClient(account))));
+  const oneAccount = (properties: Record<string, unknown>, required: string[] = []) => ({
+    type: "object" as const,
+    properties: { account: acct, ...properties },
+    required: ["account", ...required],
+  });
+  const acc = accountDescription;
+  return [
+    {
+      name: "gmail_trash",
+      readOnly: false,
+      description: `Move messages (message_ids) and/or whole threads (thread_ids) to Trash. Recoverable with gmail_untrash for about 30 days; this server has no permanent delete. ${acc()}`,
+      inputSchema: oneAccount({ message_ids: idList("Message IDs"), thread_ids: idList("Thread IDs") }),
+      handler: async (a: any) => run(a.account, NEEDS.modify, (g) => setTrashed(g, a, true)),
+    },
+    {
+      name: "gmail_untrash",
+      readOnly: false,
+      description: `Restore messages (message_ids) and/or threads (thread_ids) from Trash. ${acc()}`,
+      inputSchema: oneAccount({ message_ids: idList("Message IDs"), thread_ids: idList("Thread IDs") }),
+      handler: async (a: any) => run(a.account, NEEDS.modify, (g) => setTrashed(g, a, false)),
+    },
+    {
+      name: "gmail_send_draft",
+      readOnly: false,
+      description: `SENDS an existing draft to its recipients immediately (cannot be undone). Draft IDs come from gmail_list_drafts or gmail_draft. ${acc()}`,
+      inputSchema: oneAccount({ draft_id: { type: "string", description: "Draft ID" } }, ["draft_id"]),
+      handler: async (a: any) => run(a.account, NEEDS.send, (g) => sendDraft(g, a.draft_id)),
+    },
+    {
+      name: "gmail_create_label",
+      readOnly: false,
+      description: `Create a label (nest with "Parent/Child" in the name). Optional visibility and colour. ${acc()}`,
+      inputSchema: oneAccount({ name: { type: "string", description: "Label name" }, ...labelFields }, ["name"]),
+      handler: async (a: any) => run(a.account, NEEDS.labels, (g) => createLabel(g, a)),
+    },
+    {
+      name: "gmail_update_label",
+      readOnly: false,
+      description: `Rename a label or change its visibility or colour. Only the fields you pass change. ${acc()}`,
+      inputSchema: oneAccount(
+        { label: { type: "string", description: "Existing label name or id" }, name: { type: "string", description: "New name" }, ...labelFields },
+        ["label"]
+      ),
+      handler: async (a: any) => run(a.account, NEEDS.labels, (g) => updateLabel(g, a)),
+    },
+    {
+      name: "gmail_delete_label",
+      readOnly: false,
+      description: `Delete a user label. Messages keep their other labels and stay in the mailbox; only the label is removed. ${acc()}`,
+      inputSchema: oneAccount({ label: { type: "string", description: "Label name or id" } }, ["label"]),
+      handler: async (a: any) => run(a.account, NEEDS.labels, (g) => deleteLabel(g, a.label)),
+    },
+    {
+      name: "gmail_list_filters",
+      readOnly: true,
+      description: `List the account's filters (criteria and actions with ids). Needs the gmail.settings.basic scope. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => listFilters(g)),
+    },
+    {
+      name: "gmail_create_filter",
+      readOnly: false,
+      description: `Create a STANDING filter that acts on every future matching incoming message (label, archive, mark read, star, mark important, never spam). Needs at least one criterion and one action. Does not apply to existing mail and cannot forward. ${acc()}`,
+      inputSchema: oneAccount({
+        from: { type: "string" },
+        to: { type: "string" },
+        subject: { type: "string" },
+        query: { type: "string", description: "Gmail search query the message must match" },
+        negated_query: { type: "string", description: "Gmail search query the message must not match" },
+        has_attachment: { type: "boolean" },
+        size: { type: "number", description: "Bytes; needs size_comparison" },
+        size_comparison: { type: "string", enum: ["larger", "smaller"] },
+        add_labels: idList("Label names or ids to add"),
+        remove_labels: idList("Label names or ids to remove"),
+        mark_read: { type: "boolean" },
+        archive: { type: "boolean", description: "Skip the inbox" },
+        star: { type: "boolean" },
+        mark_important: { type: "boolean" },
+        never_spam: { type: "boolean" },
+      }),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => createFilter(g, a)),
+    },
+    {
+      name: "gmail_delete_filter",
+      readOnly: false,
+      description: `Delete a filter by id (from gmail_list_filters). Mail already filtered is unchanged. ${acc()}`,
+      inputSchema: oneAccount({ filter_id: { type: "string" } }, ["filter_id"]),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => deleteFilter(g, a.filter_id)),
+    },
+    {
+      name: "gmail_get_vacation",
+      readOnly: true,
+      description: `Read the auto-reply (vacation responder) settings. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => getVacation(g)),
+    },
+    {
+      name: "gmail_set_vacation",
+      readOnly: false,
+      description: `Turn the auto-reply on or off. When ON it automatically answers incoming senders until end_time or until turned off. Replaces all auto-reply settings, so pass every field you want kept. start_time and end_time are ISO date-times or epoch ms. ${acc()}`,
+      inputSchema: oneAccount(
+        {
+          enabled: { type: "boolean" },
+          subject: { type: "string" },
+          body_text: { type: "string", description: "Plain-text reply" },
+          body_html: { type: "string", description: "HTML reply" },
+          restrict_to_contacts: { type: "boolean" },
+          restrict_to_domain: { type: "boolean" },
+          start_time: { type: "string" },
+          end_time: { type: "string" },
+        },
+        ["enabled"]
+      ),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => setVacation(g, a)),
+    },
+    {
+      name: "gmail_list_send_as",
+      readOnly: true,
+      description: `List send-as aliases with display name, verification status and current signature. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => listSendAs(g)),
+    },
+    {
+      name: "gmail_update_signature",
+      readOnly: false,
+      description: `Replace the signature on a send-as address; it is appended to every email sent from it from now on. HTML allowed; an empty string clears it. ${acc()}`,
+      inputSchema: oneAccount(
+        {
+          send_as_email: { type: "string", description: "Address from gmail_list_send_as (the account's own address for the default)" },
+          signature: { type: "string", description: "New signature (HTML)" },
+        },
+        ["send_as_email", "signature"]
+      ),
+      handler: async (a: any) => run(a.account, NEEDS.settings, (g) => updateSignature(g, a)),
+    },
+    {
+      name: "gmail_get_profile",
+      readOnly: true,
+      description: `Account email address, message and thread totals, and the current historyId. ${acc()}`,
+      inputSchema: oneAccount({}),
+      handler: async (a: any) => run(a.account, NEEDS.read, (g) => getProfile(g)),
+    },
+    {
+      name: "gmail_list_history",
+      readOnly: true,
+      description: `List mailbox changes (messages added/deleted, label changes) since a historyId from gmail_get_profile. Gmail keeps history for about a week; an expired id errors. ${acc()}`,
+      inputSchema: oneAccount(
+        {
+          start_history_id: { type: "string" },
+          history_types: { type: "array", items: { type: "string", enum: ["messageAdded", "messageDeleted", "labelAdded", "labelRemoved"] } },
+          label_id: { type: "string", description: "Only changes touching this label id" },
+          max_results: { type: "number", description: "Default 100" },
+          page_token: { type: "string" },
+        },
+        ["start_history_id"]
+      ),
+      handler: async (a: any) => run(a.account, NEEDS.read, (g) => listHistory(g, a)),
+    },
+  ];
+}
+
+export const gmailTools: ToolDef[] = [...baseGmailTools, ...createGmailExtraTools()];

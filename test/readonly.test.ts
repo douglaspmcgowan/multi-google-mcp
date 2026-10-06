@@ -31,6 +31,8 @@ const all = [
 const EXPECTED_WRITES = [
   "gmail_send", "gmail_draft", "gmail_update_draft", "gmail_delete_draft", "gmail_download_attachment",
   "gmail_modify_labels", "gmail_archive", "gmail_mark_read",
+  "gmail_trash", "gmail_untrash", "gmail_send_draft", "gmail_create_label", "gmail_update_label", "gmail_delete_label",
+  "gmail_create_filter", "gmail_delete_filter", "gmail_set_vacation", "gmail_update_signature",
   "calendar_create_event", "calendar_update_event", "calendar_rsvp", "calendar_delete_event",
   "drive_download", "drive_export", "drive_share", "drive_unshare", "drive_create", "drive_update_content",
   "drive_upload", "drive_rename", "drive_move", "drive_copy", "drive_trash", "drive_untrash",
