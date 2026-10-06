@@ -7,8 +7,22 @@ import {
   saveConfig,
   SCOPES,
   REDIRECT_URI,
+  shortScopeName,
   type AccountTokens,
 } from "./config.js";
+
+export const AUTH_PORT = 3847;
+export const START_URL = `http://localhost:${AUTH_PORT}/start`;
+
+export interface OAuthFlowOptions {
+  /** Scopes to request; default is the full write list. */
+  scopes?: string[];
+  /** Never open a browser and never print the authorization URL; serve GET /start instead. */
+  noOpen?: boolean;
+  loginHint?: string;
+  /** Give up after this many seconds (default 300). */
+  timeoutSeconds?: number;
+}
 
 export function createOAuth2Client(clientId: string, clientSecret: string) {
   return new OAuth2Client(clientId, clientSecret, REDIRECT_URI);
@@ -44,26 +58,82 @@ export function getAuthenticatedClient(accountName: string) {
 }
 
 /**
- * Runs the OAuth flow: opens browser, catches the callback, stores tokens.
- * Returns the account label.
+ * The Google authorization URL. Offline access with a forced consent screen so
+ * a refresh token comes back; include_granted_scopes is deliberately absent, so
+ * a read-only grant never inherits scopes an earlier consent gave. Pure.
  */
-export async function runOAuthFlow(accountLabel: string): Promise<void> {
+export function buildAuthUrl(
+  client: Pick<OAuth2Client, "generateAuthUrl">,
+  opts: { scopes: string[]; loginHint?: string }
+): string {
+  return client.generateAuthUrl({
+    access_type: "offline",
+    scope: opts.scopes,
+    prompt: "consent", // force consent to always get refresh_token
+    ...(opts.loginHint ? { login_hint: opts.loginHint } : {}),
+  });
+}
+
+export interface AuthRoute {
+  status: number;
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+/**
+ * Routes the pre-callback requests. With noOpen, GET /start redirects to the
+ * authorization URL, so an agent-driven browser can be pointed at a fixed
+ * localhost address and the URL itself never reaches the terminal. Pure.
+ * Returns undefined for /callback, which the flow handles itself.
+ */
+export function routeAuthRequest(pathname: string, authUrl: string, noOpen: boolean): AuthRoute | undefined {
+  if (pathname === "/callback") return undefined;
+  if (noOpen && pathname === "/start") return { status: 302, headers: { Location: authUrl } };
+  return { status: 404, body: "Not found" };
+}
+
+/** What the CLI says when the callback server is listening. With noOpen it never contains the URL. */
+export function announceFlowStart(opts: {
+  authUrl: string;
+  noOpen: boolean;
+  log: (line: string) => void;
+  opener: (url: string) => unknown;
+}): void {
+  if (opts.noOpen) {
+    opts.log(`\n  Visit ${START_URL}\n`);
+    return;
+  }
+  opts.log(`\n  Opening browser for Google sign-in...\n`);
+  opts.log(`  If the browser doesn't open, visit this URL:\n`);
+  opts.log(`  ${opts.authUrl}\n`);
+  opts.opener(opts.authUrl);
+}
+
+/** Short names of the scopes Google reports a token as granted. */
+export function grantedShortNames(scope: string | undefined | null): string[] {
+  return (scope ?? "").trim().split(/\s+/).filter(Boolean).map(shortScopeName);
+}
+
+/**
+ * Runs the OAuth flow: opens browser (or serves /start), catches the callback,
+ * stores tokens. Resolves with the short names of the scopes actually granted.
+ */
+export async function runOAuthFlow(accountLabel: string, options: OAuthFlowOptions = {}): Promise<string[]> {
   const config = loadConfig();
   const client = createOAuth2Client(config.clientId, config.clientSecret);
+  const noOpen = options.noOpen === true;
+  const timeoutSeconds = options.timeoutSeconds ?? 300;
 
-  const authUrl = client.generateAuthUrl({
-    access_type: "offline",
-    scope: SCOPES,
-    prompt: "consent", // force consent to always get refresh_token
-  });
+  const authUrl = buildAuthUrl(client, { scopes: options.scopes ?? SCOPES, loginHint: options.loginHint });
 
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       try {
-        const url = new URL(req.url!, `http://localhost:3847`);
-        if (url.pathname !== "/callback") {
-          res.writeHead(404);
-          res.end("Not found");
+        const url = new URL(req.url!, `http://localhost:${AUTH_PORT}`);
+        const route = routeAuthRequest(url.pathname, authUrl, noOpen);
+        if (route) {
+          res.writeHead(route.status, route.headers);
+          res.end(route.body);
           return;
         }
 
@@ -102,7 +172,7 @@ export async function runOAuthFlow(accountLabel: string): Promise<void> {
         `);
 
         server.close();
-        resolve();
+        resolve(grantedShortNames((tokens as AccountTokens).scope));
       } catch (err) {
         res.writeHead(500);
         res.end("Internal error");
@@ -115,8 +185,8 @@ export async function runOAuthFlow(accountLabel: string): Promise<void> {
       if (err.code === "EADDRINUSE") {
         reject(
           new Error(
-            "Port 3847 is already in use. Close whatever is using it and try again.\n" +
-            "  To find it: lsof -i :3847"
+            `Port ${AUTH_PORT} is already in use. Close whatever is using it and try again.\n` +
+            `  To find it: lsof -i :${AUTH_PORT}`
           )
         );
       } else {
@@ -124,18 +194,14 @@ export async function runOAuthFlow(accountLabel: string): Promise<void> {
       }
     });
 
-    server.listen(3847, () => {
-      console.log(`\n  Opening browser for Google sign-in...\n`);
-      console.log(`  If the browser doesn't open, visit this URL:\n`);
-      console.log(`  ${authUrl}\n`);
-      open(authUrl);
+    server.listen(AUTH_PORT, () => {
+      announceFlowStart({ authUrl, noOpen, log: (l) => console.log(l), opener: open });
     });
 
-    // Timeout after 2 minutes
     const timer = setTimeout(() => {
       server.close();
-      reject(new Error("OAuth flow timed out after 2 minutes"));
-    }, 120_000);
+      reject(new Error(`OAuth flow timed out after ${timeoutSeconds} seconds`));
+    }, timeoutSeconds * 1000);
     server.on("close", () => clearTimeout(timer));
   });
 }

@@ -7,6 +7,7 @@ import type { ToolDef } from "./types.js";
 type TasksClient = tasks_v1.Tasks;
 
 export const TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
+export const TASKS_READONLY_SCOPE = "https://www.googleapis.com/auth/tasks.readonly";
 
 async function getTasks(account: string): Promise<TasksClient> {
   const { tasks } = await import("@googleapis/tasks");
@@ -57,6 +58,9 @@ export function createTasksTools(
   };
   const taskId = { type: "string" as const, description: "Task ID" };
   const run = <T>(acct: string, fn: () => Promise<T>) => withScope(acct, [TASKS_SCOPE], lookup, fn);
+  // Read tools also accept the read-only grant; write tools keep the full scope.
+  const runRead = <T>(acct: string, fn: () => Promise<T>) =>
+    withScope(acct, [TASKS_SCOPE, TASKS_READONLY_SCOPE], lookup, fn);
 
   return [
     {
@@ -65,7 +69,7 @@ export function createTasksTools(
       description: `List the Google Tasks lists in an account. ${accountDescription(getAccounts)}`,
       inputSchema: { type: "object" as const, properties: { account }, required: ["account"] },
       handler: async (args: { account: string }) =>
-        run(args.account, async () => {
+        runRead(args.account, async () => {
           const tasks = await getClient(args.account);
           const res = await tasks.tasklists.list({ maxResults: 100 });
           return asText((res.data.items || []).map((l) => ({ id: l.id, title: l.title, updated: l.updated })));
@@ -85,9 +89,9 @@ export function createTasksTools(
         required: ["account"],
       },
       handler: async (args: { account: string; list_id?: string; show_completed?: boolean }) =>
-        run(args.account, async () => {
+        runRead(args.account, async () => {
           const tasks = await getClient(args.account);
-          const show = args.show_completed === true;
+          const show =args.show_completed === true;
           const res = await tasks.tasks.list({
             tasklist: args.list_id || "@default",
             showCompleted: show,

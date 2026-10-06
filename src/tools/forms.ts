@@ -233,7 +233,7 @@ export function createFormsTools(
         required: ["account", "form_id"],
       },
       handler: async (args: { account: string; form_id: string; since?: string; max_results?: number }) =>
-        withScope(args.account, [SCOPE.drive, SCOPE.formsResponses, SCOPE.formsBody], scopes, async () => {
+        withScope(args.account, [SCOPE.drive, SCOPE.driveReadonly, SCOPE.formsResponses, SCOPE.formsBody], scopes, async () => {
           const forms = await getClient(args.account);
           const form = (await forms.forms.get({ formId: args.form_id } as never)).data as forms_v1.Schema$Form;
           let filter: string | undefined;
