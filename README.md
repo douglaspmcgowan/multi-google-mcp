@@ -16,14 +16,31 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `gmail_send` — send an email
 - `gmail_draft` — create a draft; optional `cc`, `bcc`, `reply_to_message_id` (threads the draft), `forward_message_id` (forward block plus original attachments), `attachment_paths`
 - `gmail_list_labels` — list all Gmail labels
+- `gmail_list_drafts` — list drafts (ids, To, Subject, Date; no bodies)
+- `gmail_update_draft` — replace a draft's content (same arguments as `gmail_draft` plus `draft_id`)
+- `gmail_delete_draft` — delete a draft
+- `gmail_list_attachments` — filename, MIME type, size and attachment id for a message
+- `gmail_download_attachment` — save one attachment into an absolute `dest_dir`; refuses to overwrite; returns path and byte count
+- `gmail_modify_labels` — add or remove labels (by name or id) on messages or a thread; `gmail_archive` and `gmail_mark_read` are thin wrappers. There is no message trash or delete tool.
+- `gmail_read_thread` — every message in a thread with plain-text bodies
+- `gmail_search_all` — search all (or chosen) accounts at once, grouped by account; one failing account does not fail the rest
+
+**Tasks** (Google Tasks; needs the `tasks` scope)
+- `tasks_list_lists`, `tasks_list`, `tasks_create`, `tasks_update`, `tasks_complete` (`completed: false` reopens). No delete tool.
+
+**Contacts** (needs `contacts.readonly` and `contacts.other.readonly`)
+- `contacts_search` — names, emails and phone numbers from saved and other contacts
 
 **Calendar**
+- `calendar_freebusy` — busy intervals per account and the merged free windows across accounts (`min_minutes`, optional `working_hours`)
 - `calendar_list_events` — list upcoming events
 - `calendar_create_event` — create an event
 - `calendar_update_event` — update an existing event (optional `send_updates`)
 - `calendar_rsvp` — accept, decline or tentatively accept an invite (optional `send_updates`)
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
+
+**Read-only mode.** Set `MULTI_GOOGLE_READ_ONLY=1` (or `true`) in the server's environment and it registers only tools marked `readOnly: true`; every write tool (anything that creates, changes, sends, shares, trashes, or saves a file to disk) is absent from `tools/list`. Accounts whose token predates the Tasks or contacts scopes get an error naming the fix: `npm run add-account -- --account <name>`.
 
 **Docs** (tab-aware: every tab has its own index space, and a request without a tabId edits the first tab)
 - `docs_get_structure` — every tab's paragraphs with index ranges, styles and list nesting; `tab_id` for one tab

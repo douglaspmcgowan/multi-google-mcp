@@ -105,6 +105,8 @@ export function createSlidesTools(
   return [
     {
       name: "slides_get_structure",
+
+      readOnly: true,
       description:
         "Read a Google Slides deck as one entry per slide: the slide's object ID and the object " +
         "ID and current text of each shape on it. Those object IDs are what slides_batch_update " +
@@ -128,6 +130,8 @@ export function createSlidesTools(
     },
     {
       name: "slides_replace_text",
+
+      readOnly: false,
       description:
         "Find and replace text across every slide in a deck, leaving layout and styling alone. " +
         `${accountDescription(getAccounts)}`,
@@ -177,6 +181,8 @@ export function createSlidesTools(
     },
     {
       name: "slides_add_from_outline",
+
+      readOnly: false,
       description:
         "Append slides to a deck from a plain outline — a title and optional bullets per slide. " +
         "Slides has no HTML import, so this is the direct route to building a deck; the other " +
@@ -224,6 +230,8 @@ export function createSlidesTools(
     },
     {
       name: "slides_batch_update",
+
+      readOnly: false,
       description:
         "Apply raw Slides API requests: createSlide, insertText, deleteText, createImage, " +
         "updateShapeProperties, updateTextStyle, tables and the rest. The whole batch is applied " +

@@ -132,6 +132,8 @@ export function createFormsTools(
   return [
     {
       name: "forms_create",
+
+      readOnly: false,
       description:
         "Create a Google Form with questions in one call. Question types: short_text, paragraph, " +
         "multiple_choice, checkboxes, dropdown (these three need options), scale (low 0/1, " +
@@ -214,6 +216,8 @@ export function createFormsTools(
     },
     {
       name: "forms_list_responses",
+
+      readOnly: true,
       description:
         "List a Google Form's responses with answers keyed by question title: responseId, " +
         "submitted time, respondentEmail (when collected) and answers. since filters to " +

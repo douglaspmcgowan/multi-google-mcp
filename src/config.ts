@@ -60,7 +60,18 @@ export const SCOPES = [
   // forms.responses.list; these are requested so a re-authorized token names them.
   "https://www.googleapis.com/auth/forms.body",
   "https://www.googleapis.com/auth/forms.responses.readonly",
+  // Google Tasks and contacts lookup. Older tokens lack these; those tools then
+  // return the add-account command for the affected account.
+  "https://www.googleapis.com/auth/tasks",
+  "https://www.googleapis.com/auth/contacts.readonly",
+  "https://www.googleapis.com/auth/contacts.other.readonly",
 ];
+
+/** True when MULTI_GOOGLE_READ_ONLY is "1" or "true": the server then lists only read tools. */
+export function isReadOnlyMode(env: Record<string, string | undefined> = process.env): boolean {
+  const v = (env.MULTI_GOOGLE_READ_ONLY ?? "").trim().toLowerCase();
+  return v === "1" || v === "true";
+}
 
 export const REDIRECT_URI = "http://localhost:3847/callback";
 export const CONFIG_DIR_PATH = CONFIG_DIR;

@@ -1,5 +1,6 @@
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
+import type { ToolDef } from "./types.js";
 
 async function getCalendar(account: string) {
   const { calendar } = await import("@googleapis/calendar");
@@ -41,9 +42,168 @@ export async function rsvpToEvent(
   return { summary: res.data.summary ?? ev.data.summary, responseStatus: me?.responseStatus };
 }
 
-export const calendarTools = [
+export interface Interval {
+  start: number;
+  end: number;
+}
+
+export interface WorkingHours {
+  /** "HH:MM" local start of the working day. */
+  start: string;
+  /** "HH:MM" local end of the working day. */
+  end: string;
+  /** Offset of local time from UTC in minutes (e.g. -420 for PDT). Default 0. */
+  utc_offset_minutes?: number;
+}
+
+/** Sort and merge overlapping or touching intervals. Pure. */
+export function mergeIntervals(intervals: Interval[]): Interval[] {
+  const sorted = intervals.filter((i) => i.end > i.start).sort((a, b) => a.start - b.start);
+  const out: Interval[] = [];
+  for (const i of sorted) {
+    const last = out[out.length - 1];
+    if (last && i.start <= last.end) last.end = Math.max(last.end, i.end);
+    else out.push({ ...i });
+  }
+  return out;
+}
+
+function parseHm(hm: string): number {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hm);
+  if (!m) throw new Error(`Invalid time "${hm}". Use HH:MM.`);
+  return (Number(m[1]) * 60 + Number(m[2])) * 60_000;
+}
+
+/** Free windows inside [timeMin, timeMax] that no busy interval covers, at least minMinutes long, optionally within daily working hours. Pure. */
+export function computeFreeWindows(
+  busy: Interval[],
+  timeMin: number,
+  timeMax: number,
+  minMinutes = 30,
+  workingHours?: WorkingHours
+): Interval[] {
+  const merged = mergeIntervals(busy);
+  let candidates: Interval[] = [];
+  let cursor = timeMin;
+  for (const b of merged) {
+    if (b.start > cursor) candidates.push({ start: cursor, end: Math.min(b.start, timeMax) });
+    cursor = Math.max(cursor, b.end);
+    if (cursor >= timeMax) break;
+  }
+  if (cursor < timeMax) candidates.push({ start: cursor, end: timeMax });
+
+  if (workingHours) {
+    const offset = (workingHours.utc_offset_minutes ?? 0) * 60_000;
+    const startMs = parseHm(workingHours.start);
+    const endMs = parseHm(workingHours.end);
+    const DAY = 86_400_000;
+    const days: Interval[] = [];
+    // Local midnight of the first day touching the range, stepping one day at a time.
+    for (let d = Math.floor((timeMin + offset) / DAY) * DAY - offset; d < timeMax; d += DAY) {
+      days.push({ start: d + startMs, end: d + endMs });
+    }
+    const clipped: Interval[] = [];
+    for (const c of candidates) {
+      for (const d of days) {
+        const s = Math.max(c.start, d.start);
+        const e = Math.min(c.end, d.end);
+        if (e > s) clipped.push({ start: s, end: e });
+      }
+    }
+    candidates = clipped;
+  }
+  return candidates.filter((c) => c.end - c.start >= minMinutes * 60_000);
+}
+
+export interface FreeBusyArgs {
+  accounts?: string[];
+  time_min: string;
+  time_max: string;
+  calendar_ids?: Record<string, string[]>;
+  min_minutes?: number;
+  working_hours?: WorkingHours;
+}
+
+/** Busy intervals per account plus merged free windows across all accounts, through an injected Calendar client factory. */
+export async function queryFreeBusy(
+  getCal: (account: string) => any | Promise<any>,
+  allAccounts: string[],
+  args: FreeBusyArgs
+) {
+  const accounts = args.accounts && args.accounts.length > 0 ? args.accounts : allAccounts;
+  const timeMin = Date.parse(args.time_min);
+  const timeMax = Date.parse(args.time_max);
+  if (Number.isNaN(timeMin) || Number.isNaN(timeMax) || timeMax <= timeMin) {
+    throw new Error("time_min and time_max must be ISO 8601 timestamps with time_max after time_min.");
+  }
+  const perAccount: Record<string, { busy?: Array<{ start: string; end: string }>; error?: string }> = {};
+  const allBusy: Interval[] = [];
+  for (const account of accounts) {
+    try {
+      const cal = await getCal(account);
+      const ids = args.calendar_ids?.[account]?.length ? args.calendar_ids[account] : ["primary"];
+      const res = await cal.freebusy.query({
+        requestBody: { timeMin: args.time_min, timeMax: args.time_max, items: ids.map((id) => ({ id })) },
+      });
+      const busy: Interval[] = [];
+      for (const id of ids) {
+        const entry = res.data.calendars?.[id];
+        if (entry?.errors?.length) {
+          throw new Error(`calendar ${id}: ${entry.errors.map((e: any) => e.reason).join(", ")}`);
+        }
+        for (const b of entry?.busy || []) busy.push({ start: Date.parse(b.start), end: Date.parse(b.end) });
+      }
+      const merged = mergeIntervals(busy);
+      allBusy.push(...merged);
+      perAccount[account] = {
+        busy: merged.map((i) => ({ start: new Date(i.start).toISOString(), end: new Date(i.end).toISOString() })),
+      };
+    } catch (e) {
+      perAccount[account] = { error: (e as Error).message };
+    }
+  }
+  const free = computeFreeWindows(allBusy, timeMin, timeMax, args.min_minutes ?? 30, args.working_hours);
+  return {
+    accounts: perAccount,
+    free_windows: free.map((i) => ({
+      start: new Date(i.start).toISOString(),
+      end: new Date(i.end).toISOString(),
+      minutes: Math.round((i.end - i.start) / 60_000),
+    })),
+  };
+}
+
+export const calendarTools: ToolDef[] = [
+  {
+    name: "calendar_freebusy",
+    readOnly: true,
+    description: `Find shared free time across accounts. Returns each account's busy intervals and the merged free windows (free on every listed account) of at least min_minutes. One account failing is reported in its own entry. ${accountDescription()}`,
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        accounts: { type: "array", items: { type: "string" }, description: "Account labels (default: every configured account)" },
+        time_min: { type: "string", description: "Start of the range (ISO 8601)" },
+        time_max: { type: "string", description: "End of the range (ISO 8601)" },
+        calendar_ids: {
+          type: "object",
+          description: "Optional map of account label to an array of calendar IDs (default: primary)",
+        },
+        min_minutes: { type: "number", description: "Minimum free window length in minutes (default 30)" },
+        working_hours: {
+          type: "object",
+          description: "Optional daily window: { start: 'HH:MM', end: 'HH:MM', utc_offset_minutes: -420 }",
+        },
+      },
+      required: ["time_min", "time_max"],
+    },
+    handler: async (args: FreeBusyArgs) => {
+      const result = await queryFreeBusy(getCalendar, getAccountNames(), args);
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  },
   {
     name: "calendar_list_events",
+    readOnly: true,
     description: `List upcoming events from a Google Calendar account. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
@@ -90,6 +250,7 @@ export const calendarTools = [
   },
   {
     name: "calendar_create_event",
+    readOnly: false,
     description: `Create a calendar event in a specific Google account. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
@@ -144,6 +305,7 @@ export const calendarTools = [
   },
   {
     name: "calendar_update_event",
+    readOnly: false,
     description: `Update an existing calendar event. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
@@ -197,6 +359,7 @@ export const calendarTools = [
   },
   {
     name: "calendar_rsvp",
+    readOnly: false,
     description: `Respond to a calendar invite as this account (accepted, declined or tentative). ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
@@ -229,6 +392,7 @@ export const calendarTools = [
   },
   {
     name: "calendar_delete_event",
+    readOnly: false,
     description: `Delete a calendar event. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,
@@ -250,6 +414,7 @@ export const calendarTools = [
   },
   {
     name: "calendar_list_calendars",
+    readOnly: true,
     description: `List all calendars in a Google account. ${accountDescription()}`,
     inputSchema: {
       type: "object" as const,

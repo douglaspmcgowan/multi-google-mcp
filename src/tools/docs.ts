@@ -468,6 +468,8 @@ export function createDocsTools(
   return [
     {
       name: "docs_get_structure",
+
+      readOnly: true,
       description:
         "Read a Google Doc as one entry per paragraph: its index range, named style, text, and " +
         "bullet {listId, level} for list items (tables appear as one TABLE entry). Reads every " +
@@ -492,6 +494,8 @@ export function createDocsTools(
     },
     {
       name: "docs_list_tabs",
+
+      readOnly: true,
       description:
         "List a Google Doc's tabs, depth-first: tabId, title, index (within its parent), " +
         "nestingLevel, parentTabId and the tab body's endIndex. No paragraph text. " +
@@ -512,6 +516,8 @@ export function createDocsTools(
     },
     {
       name: "docs_add_tab",
+
+      readOnly: false,
       description:
         "Add a tab to a Google Doc (addDocumentTab). Returns the new tab's properties, " +
         `including its tabId. ${accountDescription(getAccounts)}`,
@@ -547,6 +553,8 @@ export function createDocsTools(
     },
     {
       name: "docs_rename_tab",
+
+      readOnly: false,
       description:
         "Rename a tab in a Google Doc (updateDocumentTabProperties, fields=title). " +
         accountDescription(getAccounts),
@@ -580,6 +588,8 @@ export function createDocsTools(
     },
     {
       name: "docs_delete_tab",
+
+      readOnly: false,
       description:
         "Delete one tab from a Google Doc (deleteTab). Its content is recoverable only through " +
         "version history. confirm_title must equal the tab's current title, a tab with child " +
@@ -623,6 +633,8 @@ export function createDocsTools(
     },
     {
       name: "docs_write_tab",
+
+      readOnly: false,
       description:
         "Replace the entire body of one tab with structured paragraphs, computing every index " +
         "itself: each paragraph is {text, style?, list?, level?} where style is NORMAL_TEXT, " +
@@ -682,6 +694,8 @@ export function createDocsTools(
     },
     {
       name: "docs_write_markdown",
+
+      readOnly: false,
       description:
         "Write markdown into a Google Doc as real formatting: # headings (HEADING_1..6), - / * " +
         "bullets and 1. numbered lists (nesting by indentation), **bold**, *italic*, `code`, " +
@@ -754,6 +768,8 @@ export function createDocsTools(
     },
     {
       name: "docs_append_to_tab",
+
+      readOnly: false,
       description:
         "Append a section to the END of one tab without rewriting or re-indexing what is " +
         "already there — the safe way to add a log entry, meeting note or dated update to a " +
@@ -823,6 +839,8 @@ export function createDocsTools(
     },
     {
       name: "docs_read_markdown",
+
+      readOnly: true,
       description:
         "Read a Google Doc — or one tab — back as compact markdown: headings, nested bullet and " +
         "numbered lists, bold, italic, code (monospace), links and tables. Far smaller than " +
@@ -860,6 +878,8 @@ export function createDocsTools(
     },
     {
       name: "docs_heading_link",
+
+      readOnly: true,
       description:
         "Return a URL that deep-links to a heading in a Google Doc " +
         "(https://docs.google.com/document/d/<id>/edit?tab=<tabId>#heading=h.xxx). Match by " +
@@ -912,6 +932,8 @@ export function createDocsTools(
     },
     {
       name: "docs_replace_text",
+
+      readOnly: false,
       description:
         "Find and replace text across a Google Doc, leaving everything else untouched. This is " +
         "the safe way to revise a document other people are also editing — unlike " +
@@ -965,6 +987,8 @@ export function createDocsTools(
     },
     {
       name: "docs_batch_update",
+
+      readOnly: false,
       description:
         "Apply raw Docs API requests to a Google Doc: insertText, deleteContentRange, " +
         "updateTextStyle, updateParagraphStyle, insertTable, insertInlineImage and the rest. " +
