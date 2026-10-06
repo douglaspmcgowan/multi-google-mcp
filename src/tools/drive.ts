@@ -81,6 +81,8 @@ export function createDriveTools(
   return [
     {
       name: "drive_search",
+
+      readOnly: true,
       description: `Search files in a specific Google Drive account. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -103,6 +105,8 @@ export function createDriveTools(
     },
     {
       name: "drive_list_recent",
+
+      readOnly: true,
       description:
         "List files in a Drive folder changed since a date, newest first: id, name, mimeType, " +
         "modifiedTime, lastModifyingUser, webViewLink and path (the subfolder chain below the " +
@@ -200,6 +204,8 @@ export function createDriveTools(
     },
     {
       name: "drive_get_metadata",
+
+      readOnly: true,
       description: `Get metadata for a Drive file. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -214,6 +220,8 @@ export function createDriveTools(
     },
     {
       name: "drive_get_permissions",
+
+      readOnly: true,
       description: `List permissions for a Drive file. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -228,6 +236,8 @@ export function createDriveTools(
     },
     {
       name: "drive_download",
+
+      readOnly: false,
       description: `Download a Drive file to disk. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -252,6 +262,8 @@ export function createDriveTools(
     },
     {
       name: "drive_export",
+
+      readOnly: false,
       description:
         "Export a Google-native file (Doc, Sheet, Slides) to disk in another format, for example " +
         "text/html, application/pdf, or text/plain. Use drive_download for files that are already " +
@@ -285,6 +297,8 @@ export function createDriveTools(
     },
     {
       name: "drive_share",
+
+      readOnly: false,
       description:
         "Share a Drive file or folder with one user (email) or many (emails) in one call, all " +
         "with the same role. Each address is shared independently: with emails the result lists " +
@@ -354,6 +368,8 @@ export function createDriveTools(
     },
     {
       name: "drive_unshare",
+
+      readOnly: false,
       description:
         "Remove one permission from a Drive file. Get the permission id from drive_get_permissions. " +
         `${accountDescription(getAccounts)}`,
@@ -374,6 +390,8 @@ export function createDriveTools(
     },
     {
       name: "drive_create",
+
+      readOnly: false,
       description:
         "Create a Drive file or folder. `mime_type` accepts the shorthands doc, sheet, slides and " +
         "folder, or any explicit mime type. Pass `html` to get a formatted Google Doc — headings, " +
@@ -448,6 +466,8 @@ export function createDriveTools(
     },
     {
       name: "drive_update_content",
+
+      readOnly: false,
       description:
         "Replace the contents of an existing Drive file. Pass `html` to rewrite a Google Doc with " +
         "formatting intact. This overwrites the whole file; read it first if you mean to edit it. " +
@@ -486,6 +506,8 @@ export function createDriveTools(
     },
     {
       name: "drive_upload",
+
+      readOnly: false,
       description:
         "Upload a local file to Drive. Set `convert` to true to turn it into the matching " +
         `Google-native type. ${accountDescription(getAccounts)}`,
@@ -541,6 +563,8 @@ export function createDriveTools(
     },
     {
       name: "drive_rename",
+
+      readOnly: false,
       description: `Rename a Drive file or folder. The file ID and every existing link are unchanged. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -560,6 +584,8 @@ export function createDriveTools(
     },
     {
       name: "drive_move",
+
+      readOnly: false,
       description: `Move a Drive file into another folder. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -586,6 +612,8 @@ export function createDriveTools(
     },
     {
       name: "drive_copy",
+
+      readOnly: false,
       description: `Copy a Drive file. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -613,6 +641,8 @@ export function createDriveTools(
     },
     {
       name: "drive_trash",
+
+      readOnly: false,
       description:
         "Move a Drive file to the trash, where it stays recoverable. There is deliberately no " +
         `permanent-delete tool. ${accountDescription(getAccounts)}`,
@@ -634,6 +664,8 @@ export function createDriveTools(
     },
     {
       name: "drive_untrash",
+
+      readOnly: false,
       description: `Restore a Drive file from the trash. ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,

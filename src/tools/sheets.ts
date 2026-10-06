@@ -43,6 +43,8 @@ export function createSheetsTools(
   return [
     {
       name: "sheets_get_structure",
+
+      readOnly: true,
       description:
         "List a spreadsheet's tabs with their sheet IDs, titles and dimensions. The sheet IDs are " +
         `what sheets_batch_update edits against. ${accountDescription(getAccounts)}`,
@@ -66,6 +68,8 @@ export function createSheetsTools(
     },
     {
       name: "sheets_read_range",
+
+      readOnly: true,
       description:
         "Read cell values from a range. Reading a sheet this way returns every row — unlike a " +
         "plain-text Drive export of a spreadsheet, which silently truncates. " +
@@ -86,6 +90,8 @@ export function createSheetsTools(
     },
     {
       name: "sheets_write_range",
+
+      readOnly: false,
       description:
         "Overwrite the cells in a range with the supplied rows. Only the range given is touched. " +
         `${accountDescription(getAccounts)}`,
@@ -124,6 +130,8 @@ export function createSheetsTools(
     },
     {
       name: "sheets_append_rows",
+
+      readOnly: false,
       description:
         "Append rows after the last row with data in a range, leaving existing rows alone. " +
         `${accountDescription(getAccounts)}`,
@@ -158,6 +166,8 @@ export function createSheetsTools(
     },
     {
       name: "sheets_batch_update",
+
+      readOnly: false,
       description:
         "Apply raw Sheets API requests for structure rather than values: addSheet, " +
         "repeatCell and formatting, updateSheetProperties for frozen rows, conditional formats, " +

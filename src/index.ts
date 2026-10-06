@@ -9,8 +9,11 @@ import { sheetsTools } from "./tools/sheets.js";
 import { commentTools } from "./tools/comments.js";
 import { chatTools } from "./tools/chat.js";
 import { formsTools } from "./tools/forms.js";
+import { tasksTools } from "./tools/tasks.js";
+import { contactsTools } from "./tools/contacts.js";
+import { filterTools, type ToolDef } from "./tools/types.js";
 import { reauthCommand } from "./scopes.js";
-import { getAccountNames } from "./config.js";
+import { getAccountNames, isReadOnlyMode } from "./config.js";
 import { jsonSchemaToZod } from "./schema.js";
 
 const server = new McpServer({
@@ -18,8 +21,8 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// Register all tools
-const allTools = [
+// Register all tools; read-only mode (MULTI_GOOGLE_READ_ONLY) drops every write tool here, in one place.
+const allTools: ToolDef[] = [
   ...gmailTools,
   ...calendarTools,
   ...driveTools,
@@ -29,9 +32,11 @@ const allTools = [
   ...commentTools,
   ...chatTools,
   ...formsTools,
+  ...tasksTools,
+  ...contactsTools,
 ];
 
-for (const tool of allTools) {
+for (const tool of filterTools(allTools, isReadOnlyMode())) {
   const zodShape = jsonSchemaToZod(tool.inputSchema);
   server.tool(tool.name, tool.description, zodShape, async (args: any) => {
     try {

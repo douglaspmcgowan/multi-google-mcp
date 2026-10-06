@@ -63,6 +63,8 @@ export function createChatTools(
   return [
     {
       name: "chat_list_spaces",
+
+      readOnly: true,
       description:
         "List Google Chat spaces, group chats and DMs the account belongs to: name (spaces/...), " +
         "displayName, spaceType, spaceUri. filter e.g. 'spaceType = \"SPACE\"'. Needs scope " +
@@ -104,6 +106,8 @@ export function createChatTools(
     },
     {
       name: "chat_post_message",
+
+      readOnly: false,
       description:
         "Post a text message to a Google Chat space as the user. Chat formatting applies " +
         "(*bold*, _italic_, `code`, <url|label>). thread_key or thread_name replies in a " +
@@ -137,6 +141,8 @@ export function createChatTools(
     },
     {
       name: "chat_list_members",
+
+      readOnly: true,
       description:
         "List the members of a Google Chat space: membership name, member (users/... and type), " +
         "role and state. show_invited includes pending invites. Needs scope chat.memberships. " +
@@ -180,6 +186,8 @@ export function createChatTools(
     },
     {
       name: "chat_add_members",
+
+      readOnly: false,
       description:
         "Add people to a Google Chat space by email: email for one, emails for many. Each " +
         "address is added independently and reported as {email, ok, membership | error}. " +

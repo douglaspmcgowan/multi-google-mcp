@@ -47,6 +47,8 @@ export function createCommentTools(
   return [
     {
       name: "docs_list_comments",
+
+      readOnly: true,
       description:
         "List comments on a Google Doc (or any Drive file) with their replies, author, quoted " +
         "text and resolved state. Open comments only unless include_resolved=true. " +
@@ -86,6 +88,8 @@ export function createCommentTools(
     },
     {
       name: "docs_add_comment",
+
+      readOnly: false,
       description:
         "Add a comment to a Google Doc (or any Drive file). Unanchored by default. quoted_text " +
         "attaches the passage being discussed (shown with the comment); anchor passes a raw " +
@@ -117,6 +121,8 @@ export function createCommentTools(
     },
     {
       name: "docs_reply_comment",
+
+      readOnly: false,
       description: `Reply to a comment on a Google Doc (or any Drive file). ${accountDescription(getAccounts)}`,
       inputSchema: {
         type: "object" as const,
@@ -141,6 +147,8 @@ export function createCommentTools(
     },
     {
       name: "docs_resolve_comment",
+
+      readOnly: false,
       description:
         "Resolve a comment (posts a reply with action=resolve, optionally with text). " +
         `reopen=true reopens a resolved comment instead. ${accountDescription(getAccounts)}`,
