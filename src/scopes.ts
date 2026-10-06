@@ -65,7 +65,15 @@ export async function withScope<T>(
 
 export const SCOPE = {
   drive: `${PREFIX}drive`,
+  driveReadonly: `${PREFIX}drive.readonly`,
+  gmailModify: `${PREFIX}gmail.modify`,
+  gmailReadonly: `${PREFIX}gmail.readonly`,
+  calendar: `${PREFIX}calendar`,
+  calendarReadonly: `${PREFIX}calendar.readonly`,
+  tasks: `${PREFIX}tasks`,
+  tasksReadonly: `${PREFIX}tasks.readonly`,
   formsBody: `${PREFIX}forms.body`,
+  formsBodyReadonly: `${PREFIX}forms.body.readonly`,
   formsResponses: `${PREFIX}forms.responses.readonly`,
   chatSpaces: `${PREFIX}chat.spaces`,
   chatSpacesReadonly: `${PREFIX}chat.spaces.readonly`,

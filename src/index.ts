@@ -13,7 +13,7 @@ import { tasksTools } from "./tools/tasks.js";
 import { contactsTools } from "./tools/contacts.js";
 import { filterTools, type ToolDef } from "./tools/types.js";
 import { reauthCommand } from "./scopes.js";
-import { getAccountNames, isReadOnlyMode } from "./config.js";
+import { getAccountNames, isReadOnlyMode, loadConfig } from "./config.js";
 import { jsonSchemaToZod } from "./schema.js";
 
 const server = new McpServer({
@@ -36,7 +36,15 @@ const allTools: ToolDef[] = [
   ...contactsTools,
 ];
 
-for (const tool of filterTools(allTools, isReadOnlyMode())) {
+// Read-only when the environment says so or the loaded config carries readOnly: true.
+let loadedConfig: { readOnly?: boolean } | undefined;
+try {
+  loadedConfig = loadConfig();
+} catch {
+  loadedConfig = undefined; // an unreadable config surfaces its own error at the first tool call
+}
+
+for (const tool of filterTools(allTools, isReadOnlyMode(process.env, loadedConfig))) {
   const zodShape = jsonSchemaToZod(tool.inputSchema);
   server.tool(tool.name, tool.description, zodShape, async (args: any) => {
     try {

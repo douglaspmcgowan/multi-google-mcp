@@ -40,7 +40,21 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
 
-**Read-only mode.** Set `MULTI_GOOGLE_READ_ONLY=1` (or `true`) in the server's environment and it registers only tools marked `readOnly: true`; every write tool (anything that creates, changes, sends, shares, trashes, or saves a file to disk) is absent from `tools/list`. Accounts whose token predates the Tasks or contacts scopes get an error naming the fix: `npm run add-account -- --account <name>`.
+**Read-only mode.** The server registers only tools marked `readOnly: true` when `MULTI_GOOGLE_READ_ONLY` is `1` or `true`, or when the loaded config file carries top-level `"readOnly": true`; every write tool (anything that creates, changes, sends, shares, trashes, or saves a file to disk) is absent from `tools/list`. Accounts whose token predates the Tasks or contacts scopes get an error naming the fix: `npm run add-account -- --account <name>`.
+
+**Two configs.** `~/.config/multi-google-mcp/config.json` is the normal, write-capable config. `config.readonly.json` beside it holds accounts consented with read-only scopes only (`gmail.readonly`, `calendar.readonly`, `drive.readonly`, `tasks.readonly`, `contacts.readonly`, `contacts.other.readonly`, `forms.body.readonly`, `forms.responses.readonly`), so Google itself refuses a write on those tokens. Point a server at either with `MULTI_GOOGLE_CONFIG=<path>` in its environment.
+
+**Consent flags** (`npm run add-account -- <flags>`):
+- `--account <name>` the account label (or a bare label)
+- `--read-only` request the read-only scopes and write `config.readonly.json` (created on first use, with the OAuth client id and secret copied in from the normal config, never printed). It refuses to write into the normal `config.json`. `include_granted_scopes` is never sent, so a read-only grant does not inherit earlier write scopes.
+- `--config <path>` use another config file (same as `MULTI_GOOGLE_CONFIG`)
+- `--no-open` do not open a browser and do not print the authorization URL; print `Visit http://localhost:3847/start` instead, which redirects to Google. For an agent-driven browser.
+- `--login-hint <email>` preselect the Google account
+- `--timeout-seconds <n>` give up after n seconds (default 300) and exit 1
+- `--list-accounts-scopes` print each account and its granted scope short names (never a token)
+- `--dry-run` stop before the browser sign-in
+
+Write consent: `npm run add-account -- --account <name> --no-open --login-hint <email>`. Read-only consent: `npm run add-account -- --account <name> --read-only --no-open --login-hint <email>`. The write scope list also requests `contacts`, `gmail.settings.basic` and `meetings.space.created` ahead of the tools that will use them, so a later tool does not force another consent pass.
 
 **Docs** (tab-aware: every tab has its own index space, and a request without a tabId edits the first tab)
 - `docs_get_structure` — every tab's paragraphs with index ranges, styles and list nesting; `tab_id` for one tab

@@ -3,12 +3,28 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { fileURLToPath } from "url";
-import { loadConfig, saveConfig, CONFIG_DIR_PATH } from "./config.js";
+import {
+  loadConfig,
+  saveConfig,
+  getConfigPath,
+  setConfigPath,
+  resolveSetupConfigPath,
+  prepareReadOnlyConfig,
+  describeAccountScopes,
+  READ_ONLY_SCOPES,
+  SCOPES,
+} from "./config.js";
 import { runOAuthFlow } from "./auth.js";
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-const ask = (q: string): Promise<string> =>
-  new Promise((resolve) => rl.question(q, (a) => resolve(a.trim())));
+// Created on first use so importing this module (tests) opens no stdin handle.
+let rlInstance: readline.Interface | undefined;
+const rl = {
+  close: () => rlInstance?.close(),
+};
+const ask = (q: string): Promise<string> => {
+  rlInstance ??= readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => rlInstance!.question(q, (a) => resolve(a.trim())));
+};
 
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), ".claude", "settings.json");
 const PROJECT_DIR = path.dirname(new URL(import.meta.url).pathname.replace(/\/src$/, ""));
@@ -94,7 +110,18 @@ async function setupCredentials(): Promise<void> {
   config.clientId = clientId;
   config.clientSecret = clientSecret;
   saveConfig(config);
-  console.log(`\n  Credentials saved to ${CONFIG_DIR_PATH}/config.json\n`);
+  console.log(`\n  Credentials saved to ${getConfigPath()}\n`);
+}
+
+/** Flags that take a value; their value is never mistaken for a bare account label. */
+const VALUE_FLAGS = ["--account", "--config", "--login-hint", "--timeout-seconds"];
+
+function flagValue(args: string[], name: string): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === name) return args[i + 1];
+    if (args[i].startsWith(`${name}=`)) return args[i].slice(name.length + 1);
+  }
+  return undefined;
 }
 
 /**
@@ -104,12 +131,49 @@ async function setupCredentials(): Promise<void> {
  */
 export function accountFromArgs(argv: string[]): string | undefined {
   const args = argv.slice(2);
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === "--account") return args[i + 1];
-    if (arg.startsWith("--account=")) return arg.slice("--account=".length);
+  const explicit = flagValue(args, "--account");
+  if (explicit !== undefined) return explicit;
+  return args.find(
+    (arg, i) => !arg.startsWith("-") && !(i > 0 && VALUE_FLAGS.includes(args[i - 1]))
+  );
+}
+
+export interface SetupArgs {
+  account?: string;
+  readOnly: boolean;
+  config?: string;
+  noOpen: boolean;
+  loginHint?: string;
+  timeoutSeconds: number;
+  listAccountsScopes: boolean;
+  dryRun: boolean;
+  addAccount: boolean;
+}
+
+/** Parses the setup CLI. Pure; throws on a bad --timeout-seconds. */
+export function parseSetupArgs(argv: string[]): SetupArgs {
+  const args = argv.slice(2);
+  const t = flagValue(args, "--timeout-seconds");
+  const timeoutSeconds = t === undefined ? 300 : Number(t);
+  if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+    throw new Error(`--timeout-seconds must be a positive number, got "${t}"`);
   }
-  return args.find((arg) => !arg.startsWith("-"));
+  return {
+    account: args.includes("--add-account") ? accountFromArgs(argv) : undefined,
+    readOnly: args.includes("--read-only"),
+    config: flagValue(args, "--config"),
+    noOpen: args.includes("--no-open"),
+    loginHint: flagValue(args, "--login-hint"),
+    timeoutSeconds,
+    listAccountsScopes: args.includes("--list-accounts-scopes"),
+    dryRun: args.includes("--dry-run"),
+    addAccount: args.includes("--add-account"),
+  };
+}
+
+/** Scopes this run requests: the read-only list when asked or when the config is read-only. */
+export function scopesForRun(readOnlyFlag: boolean, config: { readOnly?: boolean }): string[] {
+  return readOnlyFlag || config.readOnly === true ? READ_ONLY_SCOPES : SCOPES;
 }
 
 async function addAccount(): Promise<void> {
@@ -140,8 +204,14 @@ async function addAccount(): Promise<void> {
   }
 
   console.log(`\n  Connecting account "${label}"...`);
-  await runOAuthFlow(label);
-  console.log(`\n  Account "${label}" connected successfully!\n`);
+  const args = parseSetupArgs(process.argv);
+  const granted = await runOAuthFlow(label, {
+    scopes: scopesForRun(args.readOnly, config),
+    noOpen: args.noOpen,
+    loginHint: args.loginHint,
+    timeoutSeconds: args.timeoutSeconds,
+  });
+  console.log(`\n  Account "${label}" connected successfully! Granted: ${granted.join(", ")}\n`);
 }
 
 function registerWithClaudeCode(): void {
@@ -179,27 +249,53 @@ function projectRoot(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
-async function reauthAccount(label: string): Promise<void> {
+async function reauthAccount(label: string, args: SetupArgs): Promise<void> {
   const config = loadConfig();
   if (!config.clientId || !config.clientSecret) {
     console.error("  No OAuth credentials found. Run `npm run setup` first.");
     process.exit(1);
   }
+  const scopes = scopesForRun(args.readOnly, config);
   const verb = config.accounts[label] ? "Re-authorizing" : "Connecting";
-  console.log(`\n  ${verb} account "${label}" with the current scope list...`);
-  if (process.argv.includes("--dry-run")) {
+  const kind = scopes === READ_ONLY_SCOPES ? "read-only" : "current";
+  console.log(`\n  ${verb} account "${label}" with the ${kind} scope list...`);
+  if (args.dryRun) {
     console.log("  --dry-run: stopping before the browser sign-in.\n");
     return;
   }
-  await runOAuthFlow(label);
-  console.log(`\n  Account "${label}" authorized. Restart the MCP server (restart Claude Code) to use it.\n`);
+  const granted = await runOAuthFlow(label, {
+    scopes,
+    noOpen: args.noOpen,
+    loginHint: args.loginHint,
+    timeoutSeconds: args.timeoutSeconds,
+  });
+  console.log(`\n  Account "${label}" authorized. Granted: ${granted.join(", ") || "(none reported)"}`);
+  console.log(`  Restart the MCP server (restart Claude Code) to use it.\n`);
 }
 
 async function main() {
-  const isAddOnly = process.argv.includes("--add-account");
-  const label = isAddOnly ? accountFromArgs(process.argv) : undefined;
+  const args = parseSetupArgs(process.argv);
+
+  if (args.readOnly && !args.addAccount && !args.listAccountsScopes) {
+    console.error("  --read-only applies to --add-account.");
+    process.exit(1);
+  }
+  if (args.readOnly || args.config) {
+    const target = resolveSetupConfigPath({ readOnly: args.readOnly, configArg: args.config, env: process.env });
+    setConfigPath(target);
+    if (args.readOnly && !args.listAccountsScopes) prepareReadOnlyConfig(target);
+  }
+
+  if (args.listAccountsScopes) {
+    const lines = describeAccountScopes(loadConfig());
+    console.log(lines.length ? lines.join("\n") : "  No accounts in " + getConfigPath());
+    return;
+  }
+
+  const isAddOnly = args.addAccount;
+  const label = isAddOnly ? args.account : undefined;
   if (label) {
-    await reauthAccount(label);
+    await reauthAccount(label, args);
     rl.close();
     return;
   }
@@ -259,7 +355,13 @@ async function main() {
   rl.close();
 }
 
-main().catch((err) => {
-  console.error("Setup failed:", err);
-  process.exit(1);
-});
+// Run only as the entry point, so tests can import the pure helpers above.
+const entry = process.argv[1] ? path.resolve(process.argv[1]) : "";
+if (entry === fileURLToPath(import.meta.url)) {
+  main()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error("Setup failed:", err instanceof Error ? err.message : err);
+      process.exit(1);
+    });
+}
