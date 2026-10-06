@@ -52,6 +52,11 @@ const EXPECTED_WRITES = [
   "calendar_quick_add", "calendar_move_event", "calendar_create_calendar", "calendar_update_calendar",
   "calendar_delete_calendar", "calendar_share_calendar", "calendar_unshare_calendar",
   "meet_create_space", "meet_update_space", "meet_end_active_conference",
+  "drive_download_revision", "drive_update_permission", "drive_transfer_ownership", "drive_set_link_sharing",
+  "drive_star", "drive_update_metadata", "forms_add_questions", "forms_batch_update",
+  "sheets_clear_range", "sheets_create", "sheets_add_tab", "sheets_rename_tab", "sheets_delete_tab",
+  "slides_save_thumbnail", "slides_delete_slide", "slides_duplicate_slide", "slides_reorder_slides",
+  "slides_insert_image", "slides_set_speaker_notes", "docs_reopen_comment", "docs_delete_comment",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {
