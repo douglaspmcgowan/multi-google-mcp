@@ -40,6 +40,11 @@ const EXPECTED_WRITES = [
   "slides_replace_text", "slides_add_from_outline", "slides_batch_update",
   "chat_post_message", "chat_add_members", "forms_create",
   "tasks_create", "tasks_update", "tasks_complete",
+  "drive_download_revision", "drive_update_permission", "drive_transfer_ownership", "drive_set_link_sharing",
+  "drive_star", "drive_update_metadata", "forms_add_questions", "forms_batch_update",
+  "sheets_clear_range", "sheets_create", "sheets_add_tab", "sheets_rename_tab", "sheets_delete_tab",
+  "slides_save_thumbnail", "slides_delete_slide", "slides_duplicate_slide", "slides_reorder_slides",
+  "slides_insert_image", "slides_set_speaker_notes", "docs_reopen_comment", "docs_delete_comment",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {

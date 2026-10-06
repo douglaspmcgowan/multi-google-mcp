@@ -47,6 +47,8 @@ test("searches files with the selected account and Drive query", async () => {
     q: "name contains 'Report' and trashed = false",
     pageSize: 5,
     fields: "files(id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents)",
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
   });
   assert.equal(json(result)[0].id, "file-1");
 });

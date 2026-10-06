@@ -71,11 +71,14 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 **Comments** (any Drive file; Drive API comments/replies)
 - `docs_list_comments` — comments with replies; `include_resolved` for resolved ones
 - `docs_add_comment` — unanchored, or with `quoted_text`/`anchor` (Docs/Sheets/Slides display API comments as unanchored — a Google limitation)
-- `docs_reply_comment`, `docs_resolve_comment` (`reopen: true` to reopen)
+- `docs_reply_comment`, `docs_resolve_comment` (`reopen: true` to reopen), `docs_reopen_comment`, `docs_delete_comment` (destructive)
 
 **Drive additions**
 - `drive_share` — `email` for one or `emails` for many; per-email `{email, ok, permissionId | error}`; `notify`, `message`
 - `drive_list_recent` — files in a folder changed since a date, newest first; `recursive` walks subfolders
+- `drive_list_folder` (paged children), `drive_list_shared_drives`, `drive_list_revisions`, `drive_download_revision` (binary files), `drive_get_storage_quota`
+- `drive_update_permission`, `drive_transfer_ownership` (direct for Workspace, pending owner for gmail.com), `drive_set_link_sharing`, `drive_star`, `drive_update_metadata`
+- Search, metadata, permission and move calls pass `supportsAllDrives`. There is deliberately no permanent-delete tool; trash is the delete surface.
 
 **Google Chat** (needs the chat scopes and a configured Chat app — see below)
 - `chat_list_spaces`, `chat_post_message` (optional thread), `chat_list_members`, `chat_add_members` (`email` or `emails`)
@@ -83,6 +86,11 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 **Google Forms** (needs the Forms API enabled)
 - `forms_create` — form plus questions (short_text, paragraph, multiple_choice, checkboxes, dropdown, scale, date, time); published unless `publish: false`
 - `forms_list_responses` — answers keyed by question title; optional `since`
+- `forms_get` (full structure), `forms_add_questions`, `forms_batch_update` (raw requests), `forms_get_response`
+
+**Sheets additions**: `sheets_clear_range`, `sheets_create` (named tabs), `sheets_add_tab`, `sheets_rename_tab`, `sheets_delete_tab` (destructive), `sheets_find`
+
+**Slides additions**: `slides_read_text` (shapes, tables, speaker notes), `slides_get_thumbnail`, `slides_save_thumbnail`, `slides_delete_slide` (destructive), `slides_duplicate_slide`, `slides_reorder_slides`, `slides_insert_image`, `slides_set_speaker_notes`
 
 **Utility**
 - `google_list_accounts` — list all connected accounts
