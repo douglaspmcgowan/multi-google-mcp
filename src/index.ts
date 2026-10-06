@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { gmailTools } from "./tools/gmail.js";
 import { calendarTools } from "./tools/calendar.js";
+import { meetTools } from "./tools/meet.js";
 import { driveTools } from "./tools/drive.js";
 import { docsTools } from "./tools/docs.js";
 import { slidesTools } from "./tools/slides.js";
@@ -25,6 +26,7 @@ const server = new McpServer({
 const allTools: ToolDef[] = [
   ...gmailTools,
   ...calendarTools,
+  ...meetTools,
   ...driveTools,
   ...docsTools,
   ...slidesTools,
