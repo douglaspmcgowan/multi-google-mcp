@@ -11,6 +11,7 @@ import { chatTools } from "../src/tools/chat.js";
 import { formsTools } from "../src/tools/forms.js";
 import { tasksTools } from "../src/tools/tasks.js";
 import { contactsTools } from "../src/tools/contacts.js";
+import { meetTools } from "../src/tools/meet.js";
 import { filterTools } from "../src/tools/types.js";
 import { isReadOnlyMode } from "../src/config.js";
 
@@ -26,6 +27,7 @@ const all = [
   ...formsTools,
   ...tasksTools,
   ...contactsTools,
+  ...meetTools,
 ];
 
 const EXPECTED_WRITES = [
@@ -47,6 +49,9 @@ const EXPECTED_WRITES = [
   "tasks_delete", "tasks_move", "tasks_clear_completed", "tasks_create_list", "tasks_rename_list", "tasks_delete_list",
   "contacts_create", "contacts_update", "contacts_delete", "contacts_create_group", "contacts_add_to_group",
   "contacts_remove_from_group", "contacts_copy_other_to_my_contacts",
+  "calendar_quick_add", "calendar_move_event", "calendar_create_calendar", "calendar_update_calendar",
+  "calendar_delete_calendar", "calendar_share_calendar", "calendar_unshare_calendar",
+  "meet_create_space", "meet_update_space", "meet_end_active_conference",
 ];
 
 test("every tool carries an explicit boolean readOnly flag", () => {

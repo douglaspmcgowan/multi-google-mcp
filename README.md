@@ -47,6 +47,16 @@ Every tool takes an `account` parameter so Claude knows which Google account to 
 - `calendar_create_event` — create an event
 - `calendar_update_event` — update an existing event (optional `send_updates`)
 - `calendar_rsvp` — accept, decline or tentatively accept an invite (optional `send_updates`)
+- `calendar_get_event` — one event in full (attendees, Meet link, recurrence, reminders)
+- `calendar_search_events` — free-text search, optional time window, one or all calendars
+- `calendar_list_instances` — occurrences of a recurring event
+- `calendar_quick_add` — create an event from a natural-language sentence
+- `calendar_move_event` — move an event to another calendar
+- `calendar_create_calendar`, `calendar_update_calendar`, `calendar_delete_calendar` — secondary calendars (delete is permanent)
+- `calendar_list_acl`, `calendar_share_calendar`, `calendar_unshare_calendar` — calendar sharing
+- `calendar_list_colors`, `calendar_get_settings` — colour ids and account settings
+- `calendar_create_event` / `calendar_update_event` also take `recurrence`, `reminders`, `color_id`, `visibility`, `time_zone`, all-day `YYYY-MM-DD` dates and `add_meet` (new Google Meet link)
+- `meet_create_space`, `meet_get_space`, `meet_update_space`, `meet_end_active_conference` — Google Meet spaces this app created (`meetings.space.created` scope)
 - `calendar_delete_event` — delete an event
 - `calendar_list_calendars` — list all calendars in the account
 
