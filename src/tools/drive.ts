@@ -25,6 +25,7 @@ function accountDescription(getAccounts: () => string[]): string {
 }
 
 const fileFields = "id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents";
+const metadataFields = `${fileFields},md5Checksum,version`;
 const folderFields = "id,name,mimeType,modifiedTime,size,starred,owners(displayName,emailAddress),webViewLink,parents";
 const revisionFields = "id,mimeType,modifiedTime,lastModifyingUser(displayName,emailAddress),size,keepForever,published,exportLinks";
 const permissionFields = "permissions(id,type,emailAddress,displayName,role,allowFileDiscovery,expirationTime)";
@@ -218,7 +219,7 @@ export function createDriveTools(
       },
       handler: async (args: { account: string; file_id: string }) => {
         const drive = await getClient(args.account);
-        const res = await drive.files.get({ fileId: args.file_id, fields: fileFields, supportsAllDrives: true } as never);
+        const res = await drive.files.get({ fileId: args.file_id, fields: metadataFields, supportsAllDrives: true } as never);
         return asText(res.data);
       },
     },

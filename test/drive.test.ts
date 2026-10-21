@@ -60,7 +60,15 @@ test("gets metadata and permissions for a selected file", async () => {
       list: async () => ({ data: { files: [] } }),
       get: async (request: Record<string, unknown>) => {
         requests.push({ method: "get", request });
-        return { data: { id: "file-1", name: "Report", mimeType: "text/plain" } };
+        return {
+          data: {
+            id: "file-1",
+            name: "Report",
+            mimeType: "text/plain",
+            md5Checksum: "6f5902ac237024bdd0c176cb93063dc4",
+            version: "42",
+          },
+        };
       },
     },
     permissions: {
@@ -76,9 +84,50 @@ test("gets metadata and permissions for a selected file", async () => {
   const permissions = json(await handler(tools, "drive_get_permissions")({ account: "personal", file_id: "file-1" }));
 
   assert.equal(metadata.id, "file-1");
+  assert.equal(metadata.md5Checksum, "6f5902ac237024bdd0c176cb93063dc4");
+  assert.equal(metadata.version, "42");
   assert.deepEqual(permissions, [{ id: "permission-1", type: "user", role: "reader" }]);
-  assert.equal(requests[0].request.fields, "id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents");
+  assert.deepEqual(requests[0], {
+    method: "get",
+    request: {
+      fileId: "file-1",
+      fields: "id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents,md5Checksum,version",
+      supportsAllDrives: true,
+    },
+  });
   assert.equal(requests[1].request.fields, "permissions(id,type,emailAddress,displayName,role,allowFileDiscovery,expirationTime)");
+});
+
+test("gets version metadata for native files when Drive omits a binary checksum", async () => {
+  const requests: Record<string, unknown>[] = [];
+  const tools = createDriveTools(() => ({
+    files: {
+      list: async () => ({ data: { files: [] } }),
+      get: async (request: Record<string, unknown>) => {
+        requests.push(request);
+        return {
+          data: {
+            id: "native-doc",
+            name: "Research notes",
+            mimeType: "application/vnd.google-apps.document",
+            version: "108",
+          },
+        };
+      },
+    },
+    permissions: { list: async () => ({ data: { permissions: [] } }), create: async () => ({ data: {} }) },
+  }), () => []);
+
+  const metadata = json(await handler(tools, "drive_get_metadata")({ account: "personal", file_id: "native-doc" }));
+
+  assert.equal(metadata.mimeType, "application/vnd.google-apps.document");
+  assert.equal(metadata.version, "108");
+  assert.equal(Object.hasOwn(metadata, "md5Checksum"), false);
+  assert.deepEqual(requests, [{
+    fileId: "native-doc",
+    fields: "id,name,mimeType,description,createdTime,modifiedTime,size,webViewLink,parents,md5Checksum,version",
+    supportsAllDrives: true,
+  }]);
 });
 
 test("shares a file with a requested email and role", async () => {
