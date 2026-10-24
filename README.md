@@ -106,7 +106,7 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 
 **Google Chat** (needs the chat scopes and a configured Chat app — see below)
 - `chat_list_spaces`, `chat_get_space`, `chat_create_space` (optional initial members), `chat_create_group_chat`, `chat_find_or_create_dm`, `chat_update_space` (name, description, guidelines)
-- `chat_post_message` (optional thread), `chat_list_messages` (time, thread, order filters), `chat_get_message`, `chat_update_message`, `chat_delete_message` (destructive), `chat_upload_attachment`
+- `chat_post_message` (optional thread), `chat_list_messages` (time, thread, order filters), `chat_get_message`, `chat_update_message`, `chat_delete_message` (destructive), `chat_upload_attachment`, `chat_download_attachment` (saves uploaded files into an absolute `dest_dir`; refuses to overwrite; Drive-file attachments are skipped)
 - `chat_list_members`, `chat_add_members` (`email` or `emails`), `chat_remove_member` (destructive), `chat_update_member_role` (manager or member)
 - `chat_add_reaction`, `chat_list_reactions`, `chat_remove_reaction`
 
