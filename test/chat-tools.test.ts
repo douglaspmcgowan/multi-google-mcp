@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -21,7 +21,7 @@ const newToken = () => SCOPES;
 
 type Call = { method: string; req: any };
 
-function fakeClient(calls: Call[], opts: { dmMissing?: boolean } = {}) {
+function fakeClient(calls: Call[], opts: { dmMissing?: boolean; attachments?: unknown[] } = {}) {
   const rec = (method: string, data: unknown = {}) => async (req: any) => {
     calls.push({ method, req });
     if (method === "spaces.findDirectMessage" && opts.dmMissing) throw Object.assign(new Error("Not found"), { code: 404 });
@@ -29,7 +29,10 @@ function fakeClient(calls: Call[], opts: { dmMissing?: boolean } = {}) {
   };
   return () =>
     ({
-      media: { upload: rec("media.upload", { attachmentDataRef: { attachmentUploadToken: "TOK" } }) },
+      media: {
+        upload: rec("media.upload", { attachmentDataRef: { attachmentUploadToken: "TOK" } }),
+        download: rec("media.download", new Uint8Array([104, 105]).buffer),
+      },
       spaces: {
         create: rec("spaces.create", { name: "spaces/N", displayName: "New", spaceType: "SPACE" }),
         setup: rec("spaces.setup", { name: "spaces/S", spaceType: "GROUP_CHAT" }),
@@ -43,7 +46,7 @@ function fakeClient(calls: Call[], opts: { dmMissing?: boolean } = {}) {
         messages: {
           create: rec("messages.create", { name: "spaces/A/messages/9", thread: { name: "spaces/A/threads/t" } }),
           list: rec("messages.list", { messages: [{ name: "spaces/A/messages/1", text: "hi", sender: { name: "users/1" } }] }),
-          get: rec("messages.get", { name: "spaces/A/messages/1", text: "hi" }),
+          get: rec("messages.get", { name: "spaces/A/messages/1", text: "hi", attachment: opts.attachments }),
           patch: rec("messages.patch", { name: "spaces/A/messages/1", text: "new" }),
           delete: rec("messages.delete"),
           reactions: {
@@ -56,7 +59,7 @@ function fakeClient(calls: Call[], opts: { dmMissing?: boolean } = {}) {
     }) as never;
 }
 
-function setup(token = newToken, opts: { dmMissing?: boolean } = {}) {
+function setup(token = newToken, opts: { dmMissing?: boolean; attachments?: unknown[] } = {}) {
   const calls: Call[] = [];
   const tools = createChatTools(fakeClient(calls, opts), () => [], token) as unknown as Tool[];
   const run = (name: string, args: Record<string, unknown>) => {
@@ -83,6 +86,7 @@ const NEW_TOOLS: Array<[string, boolean, Record<string, unknown>]> = [
   ["chat_list_reactions", true, { space: "A", message: "1" }],
   ["chat_remove_reaction", false, { reaction: "spaces/A/messages/1/reactions/r" }],
   ["chat_upload_attachment", false, { space: "A", file_path: fileURLToPath(import.meta.url) }],
+  ["chat_download_attachment", true, { message: "spaces/A/messages/1", dest_dir: tmpdir() }],
 ];
 
 test("every new chat tool is registered with the right readOnly flag", () => {
@@ -252,6 +256,25 @@ test("chat_upload_attachment uploads media then posts the message with the token
   const calls2 = setup();
   await assert.rejects(() => calls2.run("chat_upload_attachment", { space: "A", file_path: join(dir, "missing.txt") }), /ENOENT/);
   assert.equal(calls2.calls.length, 0);
+});
+
+test("chat_download_attachment saves uploads, skips Drive files, and refuses to overwrite", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chat-download-"));
+  const attachments = [
+    { contentName: "notes.pdf", attachmentDataRef: { resourceName: "media/R1" } },
+    { contentName: "drive.doc", driveDataRef: { driveFileId: "D1" } },
+  ];
+  const { calls, run } = setup(newToken, { attachments });
+  const out = json(await run("chat_download_attachment", { message: "spaces/A/messages/1", dest_dir: dir }));
+  assert.deepEqual(out, [
+    { name: "notes.pdf", path: join(dir, "notes.pdf"), bytes: 2 },
+    { name: "drive.doc", skipped: "not an uploaded file", driveFileId: "D1" },
+  ]);
+  assert.equal(calls[0].method, "messages.get");
+  assert.equal(calls[1].method, "media.download");
+  assert.deepEqual(calls[1].req, { resourceName: "media/R1", alt: "media" });
+  assert.equal(readFileSync(join(dir, "notes.pdf"), "utf8"), "hi");
+  await assert.rejects(() => run("chat_download_attachment", { message: "spaces/A/messages/1", dest_dir: dir }), /refusing to overwrite/);
 });
 
 test("a token with only the narrow reaction scope can react but not delete messages", async () => {

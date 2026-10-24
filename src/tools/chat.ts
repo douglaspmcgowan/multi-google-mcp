@@ -1,5 +1,5 @@
-import { createReadStream, statSync } from "node:fs";
-import { basename, extname } from "node:path";
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { basename, extname, join } from "node:path";
 import type { chat_v1 } from "@googleapis/chat";
 import { getAuthenticatedClient } from "../auth.js";
 import { getAccountNames } from "../config.js";
@@ -1041,6 +1041,44 @@ export function createChatTools(
           }
           const res = await chat.spaces.messages.create(request as never);
           return asText({ ...summarizeMessage(res.data as chat_v1.Schema$Message), uploaded: filename, bytes: size });
+        }),
+    },
+    {
+      name: "chat_download_attachment",
+      readOnly: true,
+      description:
+        "Save a message's uploaded file attachments into dest_dir (absolute path). Refuses to overwrite. " +
+        "Drive-file attachments are skipped (use drive_download). Needs scope chat.messages. " +
+        accountDescription(getAccounts),
+      inputSchema: {
+        type: "object" as const,
+        properties: {
+          account,
+          message: { type: "string" as const, description: "Message name (spaces/X/messages/Y)" },
+          dest_dir: { type: "string" as const, description: "Absolute directory to save into" },
+        },
+        required: ["account", "message", "dest_dir"],
+      },
+      handler: async (args: { account: string; message: string; dest_dir: string }) =>
+        withScope(args.account, NEEDS.messagesRead, scopes, async () => {
+          const chat = await getClient(args.account);
+          const msg = (await chat.spaces.messages.get({ name: args.message })).data as chat_v1.Schema$Message;
+          mkdirSync(args.dest_dir, { recursive: true });
+          const saved: Array<Record<string, unknown>> = [];
+          for (const a of msg.attachment ?? []) {
+            const ref = a.attachmentDataRef?.resourceName;
+            if (!ref) {
+              saved.push({ name: a.contentName, skipped: "not an uploaded file", driveFileId: a.driveDataRef?.driveFileId });
+              continue;
+            }
+            const dest = join(args.dest_dir, basename(a.contentName ?? "attachment"));
+            if (existsSync(dest)) throw new Error(`refusing to overwrite ${dest}`);
+            const res = await chat.media.download({ resourceName: ref, alt: "media" } as never, { responseType: "arraybuffer" });
+            const buf = Buffer.from(res.data as ArrayBuffer);
+            writeFileSync(dest, buf);
+            saved.push({ name: a.contentName, path: dest, bytes: buf.length });
+          }
+          return asText(saved);
         }),
     },
   ];
