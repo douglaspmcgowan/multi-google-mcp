@@ -111,9 +111,13 @@ Write consent: `npm run add-account -- --account <name> --no-open --login-hint <
 - `chat_add_reaction`, `chat_list_reactions`, `chat_remove_reaction`
 
 **Google Forms** (needs the Forms API enabled)
-- `forms_create` — form plus questions (short_text, paragraph, multiple_choice, checkboxes, dropdown, scale, date, time); published unless `publish: false`
-- `forms_list_responses` — answers keyed by question title; optional `since`
-- `forms_get` (full structure), `forms_add_questions`, `forms_batch_update` (raw requests), `forms_get_response`
+- `forms_create` — form plus items (short_text, paragraph, multiple_choice, checkboxes, dropdown with `other`/`shuffle`, scale, date with year/time, time of day or duration, rating, grid, text, page_break, image, video); published unless `publish: false`. Forms made through the API start unpublished, so publish before sharing the responder link.
+- `forms_list` — the account's forms from Drive (newest first); `forms_get` (full structure); `forms_responder_url` (responder link, publish state, one summary line)
+- `forms_set_publish_settings` — publish, unpublish or stop accepting responses
+- `forms_add_questions` (same item kinds, optional `position`), `forms_update_info` (title, description), `forms_update_settings` (quiz mode, email collection), `forms_update_item`, `forms_move_item`, `forms_delete_item`
+- `forms_batch_update` — raw batchUpdate requests; `forms_get_response`, `forms_list_responses` — answers keyed by question title; optional `since`
+- `forms_watch_create` (needs a Cloud Pub/Sub topic, `projects/<project>/topics/<topic>`, that grants publish to `forms-notifications@system.gserviceaccount.com`), `forms_watch_list`, `forms_watch_renew`, `forms_watch_delete` — watches expire after seven days
+- Not creatable through the API: file-upload questions (add them in the Forms UI)
 
 **Sheets additions**: `sheets_clear_range`, `sheets_create` (named tabs), `sheets_add_tab`, `sheets_rename_tab`, `sheets_delete_tab` (destructive), `sheets_find`
 

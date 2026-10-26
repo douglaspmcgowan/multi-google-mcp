@@ -54,6 +54,8 @@ be doing this in browser in the future."*
 - [x] Documented in `~/.agents/references/multi-google.md`, and `~/.agents/AGENTS.md` now says Drive
       work never goes through a browser.
 
+- [x] Full Forms API coverage, Douglas 2026-10-23: "update the multi-google mcp to have all forms capabilities." (branch agent/forms-full-20261023)
+
 ## Needs decision
 
 <!-- Record items requiring a user decision here. -->

@@ -54,6 +54,8 @@ const EXPECTED_WRITES = [
   "meet_create_space", "meet_update_space", "meet_end_active_conference",
   "drive_download_revision", "drive_update_permission", "drive_transfer_ownership", "drive_set_link_sharing",
   "drive_star", "drive_update_metadata", "forms_add_questions", "forms_batch_update",
+  "forms_set_publish_settings", "forms_update_info", "forms_update_settings", "forms_update_item",
+  "forms_move_item", "forms_delete_item", "forms_watch_create", "forms_watch_renew", "forms_watch_delete",
   "sheets_clear_range", "sheets_create", "sheets_add_tab", "sheets_rename_tab", "sheets_delete_tab",
   "slides_save_thumbnail", "slides_delete_slide", "slides_duplicate_slide", "slides_reorder_slides",
   "slides_insert_image", "slides_set_speaker_notes", "docs_reopen_comment", "docs_delete_comment",
