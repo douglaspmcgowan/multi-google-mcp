@@ -10,7 +10,46 @@ reaches all three products; this file is how you check that it really did.
 Connected MCP servers are listed in the generated capability router under `probe.mcp_servers`; read that roster for this device and list a server's tools before choosing `make-mcp`.
 Project an explicit vault mirror with `Build-HarnessIndex.ps1 -ProjectVaultMirror`; verify both surfaces with `Build-HarnessIndex.ps1 -ProjectVaultMirror -Verify`.
 
-Counts: **112 canonical skills**, **390 repository tool routes**, and **no Claude command files** -- `<repo>\commands\` holds only its `RETIRED.md`. Everything a command used to do is a canonical skill now, which is what makes it reachable from Codex and Cursor as well.
+Counts: **117 canonical skills**, **427 repository tool routes**, and **no Claude command files** -- `<repo>\commands\` holds only its `RETIRED.md`. Everything a command used to do is a canonical skill now, which is what makes it reachable from Codex and Cursor as well.
+
+## Owner map
+
+Start here. The full catalogue below is for search, not for reading top to bottom.
+
+| Need | Owner |
+|---|---|
+| Binding rules, safety, routing | `AGENTS.md` |
+| Adding or changing an agent rule | `CONTRACT-AUTHORING.md` |
+| Who does what, handoffs, merge gates | `ORCHESTRATION-PROTOCOL.md` |
+| Writing a brief or dispatching | `DISPATCH-CHECKLIST.md` |
+| Choosing the unit of work | `CLUSTERING.md` |
+| Codex Cloud tasks | `CLOUD-PROTOCOL.md` |
+| Worktrees, stable checkouts, cleanup | `WORKTREE-PROTOCOL.md` |
+| Loops, watchdogs, recurring runs | `LOOP-PROTOCOL.md` |
+| Vault reads and writes | `VAULT-PROTOCOL.md` |
+| Agent status files | `AGENT-STATUS-PROTOCOL.md` |
+| Remote machine, SSH, psmux | `REMOTE-MACHINE-PROTOCOL.md` |
+| Authorization tags | `AUTH-TAGS.md` |
+| Reader-facing prose | `WRITING.md` |
+| Headings | `HEADINGS.md` |
+| Interface and visual work | `DESIGN.md` |
+| Skill portability | `SKILL-PORTABILITY-CONTRACT.md` |
+| Agent roles, models, efforts | `roles/classes.json` |
+| Usage modes and provider order | `manifests/agent-modes.json` |
+| Launching an agent | `tools/Invoke-FleetRoute.ps1` |
+| Install, verify, reinstall the harness | `tools/Manage-Harness.ps1` |
+| Landing pull requests | `tools/Land-PullRequests.ps1` |
+| Work Scope task state | `tools/Get-WorkResume.ps1` |
+| Next work lanes | `tools/Get-WorkLanes.ps1` |
+| Skills (one folder each) | `skills` |
+| Tool and platform references | `references` |
+| Rationale for recorded rulings | `../INTENT.md` |
+| Testable requirements | `../SPEC.md` |
+| Everything else | `INDEX.md (search the catalogue below)` |
+
+## Full catalogue
+
+Search the sections below with `git grep`; do not read them in order.
 
 ## Search surfaces
 
@@ -63,8 +102,9 @@ The repository remote `pyrgos-ai/doug-harness` is the source. A receiving comput
 | `design\mission-control\REPRESENTATIONS.md` | Dashboard and operational data interface rules | Summary/detail hierarchy, visual weighting, semantic colour, nine → ninety scaling, and informative loading states; pair with `AESTHETIC-OPTIONS.md` for visual direction |
 | `skills\slides\` | Building a deck | The single front door. Two incompatible systems live under it and pairing them wrongly renders black-on-dark without erroring: `components.css` takes one of the 5 full themes and `slides-runtime.js`; `base.css` takes one of the 75 token themes and `runtime.js`. `scripts\render-deck.sh` and `scaffold-deck.sh` replace the `html-slides` package's macOS-only `render.sh` and package-writing `new-deck.sh`; that package's `export-pdf.sh`, `deploy.sh`, and `extract-pptx.py` are still used, but `scripts\pptx-out\` is documented, not runnable here — needs `bun`, five npm packages, and a missing manifest |
 | `design\harness-graph.html` | Asking how this harness wires together | The generated picture of every node and edge, plus findings nobody would otherwise see: verifiers no gate runs, tools no suite covers, generated views naming no generator. Open the page; the `.json` beside it is data, not a reading surface. `tools\Build-HarnessGraph.ps1` builds this repository-specific node-and-edge surface |
-| `VAULT-PROTOCOL.md` | Before any vault tool call | Vault placement, prohibited paths, authorship, and maintenance |
-| `<vault>\42 Setup\00 - Open Human Setup Tasks.md` | Running human-only setup queue | Device-tagged setup actions; route through `VAULT-PROTOCOL.md` §9 |
+| `VAULT-PROTOCOL.md` | Before any vault tool call | The always-read front: placement, prohibited paths, authorship, no hard-wrapping, decisions; its pointer table routes to `VAULT-REFERENCE.md` |
+| `VAULT-REFERENCE.md` | When the `VAULT-PROTOCOL.md` pointer table says so | On-demand vault sections: query route, README contract, corpus discipline, maintenance cadence, briefs, setup queue, delegation checklist, harness copy |
+| `<vault>\42 Setup\00 - Open Human Setup Tasks.md` | Running human-only setup queue | Device-tagged setup actions; route through `VAULT-REFERENCE.md` §9 |
 | `WORKTREE-PROTOCOL.md` | An isolated writable stream | Worktree creation, ownership, and cleanup |
 | `SKILL-PORTABILITY-CONTRACT.md` | Authoring or importing a skill | What a canonical package must satisfy to reach all three products |
 | `DISPATCH-CHECKLIST.md` | Before dispatching a subagent, and before claiming anything | Every requirement a brief must carry — stage and tier, the model field, no narration, the harness-defect route, owned paths, the proving command, and the interface-design route — plus the claim rules a completion must satisfy. Each line names the violation that put it there. `tools\Test-DispatchCompliance.ps1` (``& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File .agents/tools/Test-DispatchCompliance.ps1 -RepoRoot <path> -Json``) checks the mechanical half |
@@ -82,7 +122,6 @@ The repository remote `pyrgos-ai/doug-harness` is the source. A receiving comput
 | `git-template\` | Receiving-device install | Git hook template `InstallGlobal` points `init.templateDir` at |
 | `research\` | Prior investigation | Dated findings kept so a question is not re-answered from scratch. When nothing here answers it, the question's shape picks the owner: `skills\recon\` maps a field, compares it to the current setup, or reports one capability's maturity and implementation path; `skills\compare-options\` decides between named options on evidence; `skills\learn\` teaches a craft from primary and practitioner sources |
 | `research\trust-notes-proposal-20260918.md` | Reviewing durable security allow/block decisions | Evidence-limited trust-note proposals; preserves the corpus path, ranked reasons, rejected notes, and coverage boundary |
-| `briefs\` | Following a named dispatch or cluster packet | Retained execution packets; search the directory by the task or cluster subject |
 | `archive\` | Investigating retired behavior or migration history | Historical documents only; search by the retired capability or incident subject |
 | `conductor\` | Conductor runtime, fleet, recording, remote-dispatch, or self-check work | Component documents; search this directory by the named surface after `ORCHESTRATION-PROTOCOL.md` routes the task here |
 | `tools\*.md` | Documentation for a named tool or tool suite | Search beside the tool by its command or subject; `INDEX.md` supplies the executable route |
@@ -111,7 +150,7 @@ The repository remote `pyrgos-ai/doug-harness` is the source. A receiving comput
 | HTML-slides token theme catalogue | `skills\html-slides\assets\themes\tokens\README.md` |
 | HTML-slides full-deck template rationale, one `README.md` per template under `templates\full-decks\` | `skills\html-slides\templates\full-decks\course-module\README.md`; `skills\html-slides\templates\full-decks\dir-key-nav-minimal\README.md`; `skills\html-slides\templates\full-decks\graphify-dark-graph\README.md`; `skills\html-slides\templates\full-decks\hermes-cyber-terminal\README.md`; `skills\html-slides\templates\full-decks\knowledge-arch-blueprint\README.md`; `skills\html-slides\templates\full-decks\obsidian-claude-gradient\README.md`; `skills\html-slides\templates\full-decks\pitch-deck\README.md`; `skills\html-slides\templates\full-decks\presenter-mode-reveal\README.md`; `skills\html-slides\templates\full-decks\product-launch\README.md`; `skills\html-slides\templates\full-decks\tech-sharing\README.md`; `skills\html-slides\templates\full-decks\testing-safety-alert\README.md`; `skills\html-slides\templates\full-decks\weekly-report\README.md`; `skills\html-slides\templates\full-decks\xhs-pastel-card\README.md`; `skills\html-slides\templates\full-decks\xhs-post\README.md`; `skills\html-slides\templates\full-decks\xhs-white-editorial\README.md` |
 | Where a new file goes in a scaffolded app, and what it may import | `skills\stack\architecture.md` |
-| Solo-review code-reviewer dispatch template | `skills\solo-review\code-reviewer.md` |
+| Review code-reviewer dispatch template | `skills\review\code-reviewer.md` |
 | Slides proofing-bench operator docs (current, non-legacy) | `skills\slides\eval\EVAL.md`; `skills\slides\eval\test-suite.md`; `skills\slides\eval\eval-system-design.md`; `skills\slides\eval\schema\README.md`; `skills\slides\eval\fixtures\README.md`; `skills\slides\eval\metrics\visual-criteria.md` |
 | Validate-deck component test coverage | `skills\slides\scripts\validate-deck\testing\test-all-components.md` |
 
@@ -120,9 +159,7 @@ The repository remote `pyrgos-ai/doug-harness` is the source. A receiving comput
 
 ## Review surfaces
 
-`skills\review\SKILL.md` is the router — "review this" names no surface, so it reads the target's scope and failure category and picks between a single-perspective pass, an independent-perspective panel, a defect-class lens sweep, and a pre-merge worktree review. Pointed at this harness's own hooks, loops, rules, and safety edges it lands on `skills\harness-review\SKILL.md`; Hook reviews exercise synthetic stdin payloads and expected verdicts in a real subprocess rather than reasoning about what the hook would do.
-
-`skills\pathway\SKILL.md` runs a named ordered chain of those surfaces against one target; `skill-pathways.json` registers chains already extracted from real sessions with the evidence that named them. `skills\trailblaze\SKILL.md` authors or revises an entry there; a one-off sequence is not a pathway and routes back to the owners it borrows.
+`skills\review\SKILL.md` is the router and the single-reviewer — "review this" names no surface, so it reads the target's scope and failure category and picks between a single-perspective pass, an independent-perspective panel, a defect-class lens sweep, and a pre-merge worktree review. Pointed at this harness's own hooks, loops, rules, and safety edges it runs its own harness mode; Hook reviews exercise synthetic stdin payloads and expected verdicts in a real subprocess rather than reasoning about what the hook would do.
 
 
 ## Data, secrets, and vaults
@@ -136,7 +173,7 @@ The repository remote `pyrgos-ai/doug-harness` is the source. A receiving comput
 - The vault holds authored knowledge and links; project runtime data never lives there — the repository owns source and safe configuration, the declared data root owns external and runtime data, and a vault note links to that owner rather than carrying a copy. Read `VAULT-PROTOCOL.md` before a vault call, then the active vault's `IA.md`; prohibited paths stay excluded from reads, searches, mirrors, and logs.
 - `Sync-VaultMirror.ps1`, `Invoke-VaultLint.ps1`, and their tests are the current deterministic vault utilities. Google Drive Desktop already synchronizes its own local folder — never add a second copy job over a selected folder inside it. The `sync-obsidian` workflow was that duplicate; archived under `archive\skills-retired-20260823\`, and neither it nor an improvised replacement is a second sync system.
 - `Sync-VaultMirror.ps1` treats destination `.github\` as repository-owned automation and excludes it from robocopy `/MIR`, alongside the existing root-file exclusions. The regression fixture commits `.github\workflows\fixture.yml`, runs the real tool under `-DryRun`, and asserts the workflow survives; removing the exclusion fails only that case while the other nine remain green.
-- Obsidian runtime and Sync facts, including the diagnostic lesson that expected-file absence cannot establish state, live in `VAULT-PROTOCOL.md` → **Obsidian runtime and Sync**; use that section before diagnosing a vault.
+- Obsidian runtime and Sync facts, including the diagnostic lesson that expected-file absence cannot establish state, live in `VAULT-REFERENCE.md` → **Obsidian runtime and Sync**; use that section before diagnosing a vault.
 
 `Find-PromptCorpus.ps1` (``& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File .agents/tools/Find-PromptCorpus.ps1 -CorpusRoot <path> -AllowedRoot <path>``) is retrieval; three skills own the questions asked of what it returns. `skills\detective\SKILL.md` finds patterns and automation candidates across recent sessions, transcripts, work records, or structured project history. `skills\investigate\SKILL.md` establishes root cause and full impact of one specific incident. `skills\trainer\SKILL.md` reads one canonical skill's real usage history for improvement opportunities; both it and detective stop rather than invent when data is too thin to carry a claim.
 
@@ -175,6 +212,13 @@ Every file under `.agents\references\`, read by name after a tool failure or bef
 | `references\codex-workflow.md` |
 | `references\codex.md` |
 | `references\cursor-agent.md` |
+| `references\dispatch-interface-route.md` |
+| `references\dispatch-provider-ladder.md` |
+| `references\dispatch-provider-notes-20260903.md` |
+| `references\dispatch-rule-detail.md` |
+| `references\dispatch-worker-rules.md` |
+| `references\effort-tiers.md` |
+| `references\failure-audit-20261107.md` |
 | `references\fleet-dispatch-quickstart.md` |
 | `references\fleet-router.md` |
 | `references\fleet.md` |
@@ -183,28 +227,35 @@ Every file under `.agents\references\`, read by name after a tool failure or bef
 | `references\google-drive-mcp.md` |
 | `references\groq.md` |
 | `references\harness-health.md` |
+| `references\hook-map.md` |
 | `references\interactive-usage-limit-resume.md` |
-| `references\jules.md` |
-| `references\machine-ops.md` |
+| `references\LANE-CONTRACT.md` |
+| `references\manage-harness.md` |
 | `references\mattpocock-skills.md` |
 | `references\mcp-agent-mail-evaluation.md` |
 | `references\miktex.md` |
+| `references\monarch.md` |
 | `references\multi-google.md` |
 | `references\muse-api.md` |
 | `references\obsidian.md` |
 | `references\on-ice.md` |
 | `references\opencode.md` |
+| `references\operator.md` |
 | `references\other-machines.md` |
 | `references\powershell.md` |
 | `references\product-readiness.md` |
 | `references\provider-quota-verification.md` |
 | `references\provider-quota.md` |
 | `references\remote-desktop.md` |
+| `references\review-cost-audit.md` |
 | `references\routing-map.md` |
-| `references\self-repair.md` |
+| `references\site-sessions.md` |
+| `references\test-cut-20261107.md` |
 | `references\todoist.md` |
+| `references\vercel.md` |
 | `references\windows-paths.md` |
 | `references\work-scope.md` |
+| `references\ws.md` |
 
 ## Harness investigation and audit records
 
@@ -226,6 +277,7 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 |---|
 | `adapters\agy\AGENTS.md` |
 | `adapters\claude\CLAUDE.md` |
+| `adapters\claude\mods\harness-hud\REQUIREMENTS.md` |
 | `adapters\codex\AGENTS.md` |
 | `adapters\opencode\AGENTS.md` |
 | `AGENT-STATUS-PROTOCOL.md` |
@@ -233,33 +285,59 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `AUTH-TAGS.md` |
 | `benchmarks\delegate-routing\README.md` |
 | `benchmarks\delegate-routing\RESULTS.md` |
-| `briefs\cluster-capability-graph-20260903.md` |
-| `briefs\cluster-claude-readme-repair-20260903.md` |
-| `briefs\cluster-cloud-dispatch-20260903.md` |
-| `briefs\cluster-contract-enforcement-20260903.md` |
-| `briefs\cluster-cross-platform-adapters-20260903.md` |
-| `briefs\cluster-cross-product-harness-parity-20260903.md` |
-| `briefs\cluster-delegate-writes-wrong-checkout-20260903.md` |
-| `briefs\cluster-executor-reach-20260903.md` |
-| `briefs\cluster-gmail-multi-account-route-20260903.md` |
-| `briefs\cluster-guard-authorization-20260903.md` |
-| `briefs\cluster-host-capacity-20260903.md` |
-| `briefs\cluster-install-global-paths-20260903.md` |
-| `briefs\cluster-output-mode-consolidation-20260903.md` |
-| `briefs\cluster-package-second-brain-20260903.md` |
-| `briefs\cluster-project-data-transport-20260903.md` |
-| `briefs\cluster-projection-sync-20260903.md` |
-| `briefs\cluster-prompt-corpus-recall-20260903.md` |
-| `briefs\cluster-taskmap-product-packet-20260903.md` |
-| `briefs\cluster-unattended-loop-20260903.md` |
-| `briefs\cluster-verifier-honesty-20260903.md` |
-| `briefs\cluster-visualizer-skill-20260903.md` |
-| `briefs\cluster-workscope-integrity-20260903.md` |
 | `CAPABILITY-INVENTORY.md` |
 | `capability-reach-classification.md` |
 | `CLOUD-PROTOCOL.md` |
 | `CLOUD-SURFACES.md` |
+| `cloud\claude-environment\packet.md` |
+| `cloud\environment-contract\README.md` |
 | `cloud\FRESH-MACHINE-READINESS.md` |
+| `cloud\pds-bootstrap-distribution\README.md` |
+| `cloud\profiles\browser-addon\README.md` |
+| `cloud\profiles\browser-addon\start-appendix.md` |
+| `cloud\profiles\INSTALL-START.md` |
+| `cloud\project-migration\README.md` |
+| `cloud\state-contract\CLAUDE-CHECKPOINT.md` |
+| `cloud\state-contract\SPEC.md` |
+| `cloud\tests\bootstrap\README.md` |
+| `cloud\tests\dependencies\evidence\20261101\HOST-HANDOFF.md` |
+| `cloud\tests\dependencies\evidence\20261101\start-engineering.md` |
+| `cloud\tests\dependencies\evidence\20261101\start-science.md` |
+| `cloud\tests\dependencies\evidence\20261101\start-web.md` |
+| `cloud\tests\limited-release\evidence\20261101\HANDOFF.md` |
+| `cloud\tests\limited-release\evidence\20261101\start-engineering.md` |
+| `cloud\tests\limited-release\evidence\20261101\start-science.md` |
+| `cloud\tests\limited-release\evidence\20261101\start-web.md` |
+| `cloud\tests\native-review251\evidence\20261101\brief.md` |
+| `cloud\tests\native-review251\evidence\20261101\composed-native-request.md` |
+| `cloud\tests\native-review251\evidence\20261101\original-capsule.md` |
+| `cloud\tests\native-review251\evidence\20261101\RESULTS.md` |
+| `cloud\tests\native-review251\evidence\20261101\task-capsule.md` |
+| `cloud\tests\pds-composed262\evidence\start-pds.PROVISIONAL.md` |
+| `cloud\tests\pds-fallback258\evidence\RECONSTRUCT.md` |
+| `cloud\tests\pds-fallback258\evidence\RESULTS.md` |
+| `cloud\tests\pds-integration257\evidence\RESULTS.md` |
+| `cloud\tests\pds-publication266\evidence\start-pds.md` |
+| `cloud\tests\project-migration\evidence\20261101-admission\RESULTS.md` |
+| `cloud\tests\project-migration\evidence\20261101-admission\start-pds.md` |
+| `cloud\tests\project-migration\evidence\20261101\RESULTS.md` |
+| `cloud\tests\project-migration\evidence\20261101\start-pds.md` |
+| `cloud\tests\project-migration\evidence\20261101\start-sarah.md` |
+| `cloud\tests\session\evidence\20261101\browser-interaction\HANDOFF.md` |
+| `cloud\tests\session\evidence\20261101\HOST-HANDOFF.md` |
+| `cloud\tests\session\evidence\20261101\settings-interaction\HANDOFF.md` |
+| `cloud\tests\session\evidence\20261101\start-engineering.md` |
+| `cloud\tests\session\evidence\20261101\start-science.md` |
+| `cloud\tests\session\evidence\20261101\start-web.md` |
+| `cloud\tests\startup\evidence\20261101-consolidated\HOST-HANDOFF.md` |
+| `cloud\tests\startup\evidence\20261101-consolidated\start-engineering.md` |
+| `cloud\tests\startup\evidence\20261101-consolidated\start-science.md` |
+| `cloud\tests\startup\evidence\20261101-consolidated\start-web.md` |
+| `cloud\tests\startup\evidence\20261101-consolidated\start.md` |
+| `cloud\tests\startup\evidence\20261101-v2\NEXT-CHECKS.md` |
+| `cloud\tests\startup\evidence\20261101-v2\start.md` |
+| `cloud\tests\state\evidence\20261101\start-bd6.md` |
+| `cloud\updates\README.md` |
 | `cloud\VAULT-CONTRACT.md` |
 | `CLUSTERING.md` |
 | `conductor\ADVISOR-BACKEND.md` |
@@ -313,6 +391,9 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `conductor\SPEC.md` |
 | `conductor\VERIFICATION.md` |
 | `conformance\2026-09-05-live-run.md` |
+| `context\douglas\README.md` |
+| `context\douglas\research-sources.md` |
+| `context\douglas\research.md` |
 | `CONTRACT-AUTHORING.md` |
 | `DESIGN.md` |
 | `design\ADVISOR-PRODUCTION-READY.md` |
@@ -322,6 +403,7 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `design\animation\liquid-glass.md` |
 | `design\animation\scroll-reveal.md` |
 | `design\animation\sticky-stack.md` |
+| `design\app-standard.md` |
 | `design\craft\device-mockups.md` |
 | `design\craft\from-code.md` |
 | `design\craft\from-reference.md` |
@@ -343,6 +425,7 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `design\design-spaces\README.md` |
 | `design\fullscope-checklist.md` |
 | `design\fundamentals.md` |
+| `design\harness-atlas\README.md` |
 | `design\harness-map\DESIGN.md` |
 | `design\icons\libraries.md` |
 | `design\languages\industrial-brutalist-ui.md` |
@@ -355,6 +438,8 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `design\mobile.md` |
 | `design\precedence.md` |
 | `design\preflight.md` |
+| `design\skill-atlas\README.md` |
+| `design\skill-viewer\README.md` |
 | `design\slides-and-posters.md` |
 | `design\slides\bold-template-pack\README.md` |
 | `design\slides\bold-template-pack\templates\8-bit-orbit\design.md` |
@@ -438,6 +523,9 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `design\workflow-design-template.md` |
 | `DISPATCH-CHECKLIST.md` |
 | `feedback\FEEDBACK-LOG.md` |
+| `fleet-results\tts-codex-hook-shape-20261031.md` |
+| `fleet-results\tts-inspection-event-repair-20261031.md` |
+| `fleet-results\tts-pwsh-restrictedpath-20261031.md` |
 | `handoffs\af-design-proposal-awaiting-gate.md` |
 | `handoffs\capsule-portable-setup-folder-20260810.md` |
 | `handoffs\cloud-rollout-stalled-at-two-of-sixteen-20260809.md` |
@@ -453,12 +541,13 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `handoffs\ruling-leftover-design-roll-in-or-delete-20260809.md` |
 | `handoffs\slides-consolidation-audit.md` |
 | `handoffs\workscope-resolve-blocker-fallthrough-20260812.md` |
+| `HEADINGS.md` |
 | `human-readable\CHANGELOG.md` |
 | `human-readable\README.md` |
-| `JULES-PROTOCOL.md` |
 | `LOOP-PROTOCOL.md` |
 | `loops\harness-close-out.md` |
 | `loops\harness-meets-its-specs.md` |
+| `loops\policy-conflict-sweep\CONTRACT.md` |
 | `loops\since-friday-20260906.md` |
 | `loops\work-scope-performance.md` |
 | `MEMORY.md` |
@@ -483,6 +572,7 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `overlays\verification-before-completion-evidence.md` |
 | `port-surface\README.md` |
 | `prompts\hourly-conductor-loop.md` |
+| `prompts\meng-transcripts.md` |
 | `recordings\README.md` |
 | `references\agy.md` |
 | `references\ai-studio.md` |
@@ -495,6 +585,13 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `references\codex-workflow.md` |
 | `references\codex.md` |
 | `references\cursor-agent.md` |
+| `references\dispatch-interface-route.md` |
+| `references\dispatch-provider-ladder.md` |
+| `references\dispatch-provider-notes-20260903.md` |
+| `references\dispatch-rule-detail.md` |
+| `references\dispatch-worker-rules.md` |
+| `references\effort-tiers.md` |
+| `references\failure-audit-20261107.md` |
 | `references\fleet-dispatch-quickstart.md` |
 | `references\fleet-router.md` |
 | `references\fleet.md` |
@@ -503,50 +600,70 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `references\google-drive-mcp.md` |
 | `references\groq.md` |
 | `references\harness-health.md` |
+| `references\hook-map.md` |
 | `references\interactive-usage-limit-resume.md` |
-| `references\jules.md` |
-| `references\machine-ops.md` |
+| `references\LANE-CONTRACT.md` |
+| `references\manage-harness.md` |
 | `references\mattpocock-skills.md` |
 | `references\mcp-agent-mail-evaluation.md` |
 | `references\miktex.md` |
+| `references\monarch.md` |
 | `references\multi-google.md` |
 | `references\muse-api.md` |
 | `references\obsidian.md` |
 | `references\on-ice.md` |
 | `references\opencode.md` |
+| `references\operator.md` |
 | `references\other-machines.md` |
 | `references\powershell.md` |
 | `references\product-readiness.md` |
 | `references\provider-quota-verification.md` |
 | `references\provider-quota.md` |
 | `references\remote-desktop.md` |
+| `references\review-cost-audit.md` |
 | `references\routing-map.md` |
-| `references\self-repair.md` |
+| `references\scheduled-tasks\meng-transcripts-to-third-brain.md` |
+| `references\site-sessions.md` |
+| `references\test-cut-20261107.md` |
 | `references\todoist.md` |
+| `references\vercel.md` |
 | `references\windows-paths.md` |
 | `references\work-scope.md` |
+| `references\ws.md` |
 | `REMOTE-MACHINE-PROTOCOL.md` |
 | `REPAIR-SHOP-DESIGN.md` |
-| `repair-shop\CONDUCTOR-PLAN.md` |
-| `repair-shop\CONDUCTOR.md` |
-| `repair-shop\REVIEW-repair-shop.md` |
-| `repair-shop\skill-sweep-20260906.md` |
-| `repair-shop\SPEC.md` |
-| `repair-shop\triage-A-hooks-js.md` |
-| `repair-shop\triage-B-workscope.md` |
-| `repair-shop\triage-C-cloud-conductor.md` |
-| `repair-shop\triage-D-harness-install.md` |
-| `repair-shop\triage-E-docs-contract.md` |
-| `repair-shop\triage-F-intake-status.md` |
-| `repair-shop\triage-G-other-tools.md` |
-| `repair-shop\triage-H-unlocated.md` |
+| `REQUIREMENTS-RECORD.md` |
 | `research\agent-fleet-operations-practices.md` |
 | `research\agy-cli.md` |
 | `research\antigravity-and-gemini-workers.md` |
 | `research\antigravity-cli.md` |
 | `research\audio-native-models.md` |
+| `research\claude-cloud-capability\findings.md` |
 | `research\conductor-plumbing.md` |
 | `research\consolidation-wave6-review-20261011.md` |
+| `research\coordination-plan-20261024\DECISIONS.md` |
+| `research\coordination-plan-20261024\evidence\cloud-accounts.md` |
+| `research\coordination-plan-20261024\evidence\cloud-canary-berkeley-douglas4587-20261024.md` |
+| `research\coordination-plan-20261024\evidence\cloud-canary-berkeley-douglas7899-20261031.md` |
+| `research\coordination-plan-20261024\evidence\cloud-canary-berkeley-douglas8720-20261031.md` |
+| `research\coordination-plan-20261024\evidence\cloud-canary-berkeley-dpm5970-20261024.md` |
+| `research\coordination-plan-20261024\evidence\external-practice.md` |
+| `research\coordination-plan-20261024\evidence\inventory.md` |
+| `research\coordination-plan-20261024\evidence\lane-startup.md` |
+| `research\coordination-plan-20261024\evidence\misfire-store.md` |
+| `research\coordination-plan-20261024\evidence\mission-control-writes.md` |
+| `research\coordination-plan-20261024\evidence\mission-control.md` |
+| `research\coordination-plan-20261024\evidence\rules-delivery.md` |
+| `research\coordination-plan-20261024\evidence\workscope-brief-source.md` |
+| `research\coordination-plan-20261024\intake\README.md` |
+| `research\coordination-plan-20261024\LOOP.md` |
+| `research\coordination-plan-20261024\PLAN.md` |
+| `research\coordination-plan-20261024\README.md` |
+| `research\delegation-break-even-20261023.md` |
+| `research\delegation-break-even-20261023\external.md` |
+| `research\delegation-break-even-20261023\internal.md` |
+| `research\delegation-break-even-20261023\measured.md` |
+| `research\delegation-break-even-20261023\practice.md` |
 | `research\gemini-flash-worker-fit.md` |
 | `research\hook-defect-proposals-20261011.md` |
 | `research\intake-undecided-verdicts-20261011.md` |
@@ -558,6 +675,29 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `research\thinkpad-as-agent-host.md` |
 | `research\trust-notes-proposal-20260918.md` |
 | `research\windows-memory-on-this-host.md` |
+| `roles\fixtures\policy-lint\base\.agents\AUTH-TAGS.md` |
+| `roles\fixtures\policy-lint\base\.agents\skills\plan\SKILL.md` |
+| `roles\fixtures\policy-lint\builder-building-role\.agents\skills\ship\SKILL.md` |
+| `roles\fixtures\policy-lint\builder-free-role\.agents\skills\ship\SKILL.md` |
+| `roles\fixtures\policy-lint\builder-wrong-mode\.agents\skills\ship\SKILL.md` |
+| `roles\fixtures\policy-lint\codex-adapter\.agents\adapters\codex\AGENTS.md` |
+| `roles\fixtures\policy-lint\effort-right\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\effort-wrong\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\hard-other-sense\.agents\skills\plan\SKILL.md` |
+| `roles\fixtures\policy-lint\local-unknown\.agents\skills\ship\SKILL.md` |
+| `roles\fixtures\policy-lint\markup-right\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\markup-wrong\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\model-unqualified\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\reviewer-claim-no-browser-declared\.agents\skills\review-notes\SKILL.md` |
+| `roles\fixtures\policy-lint\reviewer-claim\.agents\skills\review-notes\SKILL.md` |
+| `roles\fixtures\policy-lint\sonnet-refused-hard-only\.agents\skills\plan\SKILL.md` |
+| `roles\fixtures\policy-lint\sonnet-refused-owner-disqualified\.agents\skills\plan\SKILL.md` |
+| `roles\fixtures\policy-lint\sonnet-refused\.agents\skills\plan\SKILL.md` |
+| `roles\fixtures\policy-lint\tag-unknown\.agents\skills\ship\SKILL.md` |
+| `roles\fixtures\policy-lint\was-current\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\was-dated\.agents\skills\review\SKILL.md` |
+| `roles\fixtures\policy-lint\widened-scan\.agents\repair-shop\NOTES.md` |
+| `roles\fixtures\policy-lint\widened-scan\.agents\roles\NOTES.md` |
 | `roles\README.md` |
 | `SKILL-PORTABILITY-CONTRACT.md` |
 | `specs\HARNESS-SPECS-20260905.md` |
@@ -585,6 +725,11 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `templates\Outputs\00 - Outputs Index.md` |
 | `templates\PRODUCT.md` |
 | `templates\TASK.md` |
+| `tests\JUSTIFICATIONS.md` |
+| `tools\auth-tag-catalogue\live-listing.md` |
+| `tools\auth-tag-catalogue\localhost-grants.md` |
+| `tools\auth-tag-catalogue\session-revocation.md` |
+| `tools\cloud-browser\README.md` |
 | `tools\fleet-adapters\README.md` |
 | `tools\fleet-adapters\SOLO_REVIEW_2026-09-14.md` |
 | `tools\pilot-tests\PILOT-README.md` |
@@ -592,7 +737,9 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `tools\README-design-space-explorer-server.md` |
 | `tools\VAULT-SURVEY.md` |
 | `VAULT-PROTOCOL.md` |
+| `VAULT-REFERENCE.md` |
 | `verification\codex-workflow\README.md` |
+| `work\app-standard\seed-checklist.md` |
 | `work\designs\context-injection-inventory.md` |
 | `work\designs\workscope-recommendations.md` |
 | `work\designs\workscope-repairshop-build-plan.md` |
@@ -627,11 +774,16 @@ Every active markdown document under `.agents\` is listed here so an agent can r
 | `work\dispositions\2026-10-04-intake-final-4.md` |
 | `work\dispositions\2026-10-04-router-queue.md` |
 | `work\dispositions\2026-10-05-intake-triage.md` |
+| `work\dispositions\2026-10-05-research-frontier-mode.md` |
+| `work\dispositions\2026-11-06-k01-k03-k04-router-cluster.md` |
+| `work\dispositions\2026-11-07-hooks-round2.md` |
+| `work\dispositions\2026-11-07-hooks-round3.md` |
 | `work\douglas-working-loop.md` |
 | `work\harness-health-loop.md` |
 | `work\hook-latency-loop.md` |
 | `work\overnight-loop-brief.md` |
 | `WORKTREE-PROTOCOL.md` |
+| `WRITING.md` |
 
 ## Repository tools
 
@@ -645,17 +797,18 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 |---|---|---|
 | `Add-FleetIssue.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Add-FleetIssue.ps1` |
 | `Add-ProjectIntake.ps1` | Queue an issue for another project, from wherever you happen to be working. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Add-ProjectIntake.ps1` |
+| `Add-SessionHandoff.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Add-SessionHandoff.ps1` |
 | `Add-WorkScopeLegacyHashAdmission.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Add-WorkScopeLegacyHashAdmission.ps1` |
 | `agent-worktree.cmd` | (no comment-based synopsis) | `<harness-root>/tools/agent-worktree.cmd` |
 | `agent-worktree.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool agent-worktree.ps1` |
 | `AgentMailbox.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool AgentMailbox.ps1` |
-| `Apply-RepairShopDispositions.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Apply-RepairShopDispositions.ps1` |
 | `Apply-SkillOverlays.ps1` | Applies the canonical body patches registered in overlays.json to a projected skills tree, and verifies that a projection carries exactly the regis... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Apply-SkillOverlays.ps1` |
 | `Approve-ClaudeSkillAdapter.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Approve-ClaudeSkillAdapter.ps1` |
 | `Assert-FleetRouteAdmission.ps1` | Command-line form of FleetRouteAdmission.psm1 for shell launchers (cloud-fleet-tick.sh). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Assert-FleetRouteAdmission.ps1` |
 | `attune-stylometry.py` | (no comment-based synopsis) | `<harness-root>/tools/attune-stylometry.py` |
 | `Backup-AgentWorkspace.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Backup-AgentWorkspace.cmd` |
 | `Backup-AgentWorkspace.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Backup-AgentWorkspace.ps1` |
+| `Bind-CodexCloudNativeHandoff.ps1` | Atomically binds caller-observed Codex native thread evidence to one prepared handoff. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Bind-CodexCloudNativeHandoff.ps1` |
 | `Build-AgentRoleProjections.ps1` | Project the canonical agent-role definitions onto Claude and Codex, and publish the dispatch manifest. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-AgentRoleProjections.ps1` |
 | `Build-AuthTagCatalogue.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-AuthTagCatalogue.ps1` |
 | `Build-CapabilityRouter.ps1` | Build the generated capability router that the SessionStart hook pushes into every session. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-CapabilityRouter.ps1` |
@@ -671,13 +824,20 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Build-SlideLibraryApp.ps1` | Build the single-file browsing surface over every slide asset already on this machine: the 80 indexed themes, the 34 bold templates, the 15 full de... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-SlideLibraryApp.ps1` |
 | `Build-SlideThemeIndex.ps1` | Build the machine-readable pairing index for every html-slides theme: which of the two incompatible CSS systems each theme belongs to, and whether ... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-SlideThemeIndex.ps1` |
 | `Build-SpecLedgerView.ps1` | The SPEC.md generator for the spec ledger block. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Build-SpecLedgerView.ps1` |
+| `ca.cmd` | (no comment-based synopsis) | `<harness-root>/tools/ca.cmd` |
+| `ca.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool ca.ps1` |
 | `canvas-get.py` | (no comment-based synopsis) | `<harness-root>/tools/canvas-get.py` |
+| `Capture-AppWindow.ps1` | Captures one visible Claude desktop window to a PNG, even when other windows cover it. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Capture-AppWindow.ps1` |
 | `Capture-WorkDiscovery.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Capture-WorkDiscovery.ps1` |
 | `check-condense.mjs` | (no comment-based synopsis) | `<harness-root>/tools/check-condense.mjs` |
 | `Clear-FleetSurfaceHealth.ps1` | Clears a fleet surface's recorded failure history, with a required reason. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-FleetSurfaceHealth.ps1` |
+| `Clear-HostMemoryPressure.ps1` | Frees memory on this Windows host by calling the versioned tool that owns each kind of leak. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-HostMemoryPressure.ps1` |
 | `Clear-PlaywrightOrphans.ps1` | Reclaim orphaned Playwright browser trees and their abandoned temp profile directories. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-PlaywrightOrphans.ps1` |
 | `Clear-StaleAgentProcesses.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-StaleAgentProcesses.ps1` |
+| `Clear-StaleClaudeAccountLogin.ps1` | Finds, and with -Clear removes, sign-in leftovers from earlier `ca <name> login` runs: `claude auth login` processes (and their cmd.exe / node wrap... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-StaleClaudeAccountLogin.ps1` |
 | `Clear-StaleLocks.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Clear-StaleLocks.ps1` |
+| `cloud-work-resume.py` | (no comment-based synopsis) | `<harness-root>/tools/cloud-work-resume.py` |
+| `CloudGovernanceMaterialize.py` | (no comment-based synopsis) | `<harness-root>/tools/CloudGovernanceMaterialize.py` |
 | `codex-dispatch-reference.ps1` | Harness-owned Codex dispatch shapes that Test-DispatchCompliance.ps1 can measure. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool codex-dispatch-reference.ps1` |
 | `Collect-RemoteLane.ps1` | Retrieves a remote machine's committed lane branch and publishes it, in one command. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Collect-RemoteLane.ps1` |
 | `Collect-RemoteLaneBranch.ps1` | Recovers a lane branch from a peer with no GitHub auth: bundle, verify, fetch, push. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Collect-RemoteLaneBranch.ps1` |
@@ -685,23 +845,28 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Complete-FleetDispatch.ps1` | Closes one dispatch (-DispatchId), or reconciles the whole registry (-Reconcile). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Complete-FleetDispatch.ps1` |
 | `Compress-SkillDescriptions.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Compress-SkillDescriptions.ps1` |
 | `Convert-HumanGuide.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Convert-HumanGuide.ps1` |
+| `ConvertTo-AgentBrief.ps1` | Validates a brief spec (JSON) against .agents/manifests/agent-brief.schema.json and renders the markdown brief. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool ConvertTo-AgentBrief.ps1` |
 | `ConvertTo-ReadinessMarkdown.ps1` | Renders READINESS.md from .agents/work/readiness.json (schema app-readiness/v1). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool ConvertTo-ReadinessMarkdown.ps1` |
 | `DeviceAccessCommon.ps1` | Extra ssh arguments (-i <file> -o IdentitiesOnly=yes) for a target, or an empty array when the manifest names none or the identity file is absent o... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool DeviceAccessCommon.ps1` |
 | `Dispatch-Lane.ps1` | Records and completes a routed lane's worktree lifecycle. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Dispatch-Lane.ps1` |
 | `Enable-Gitleaks.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Enable-Gitleaks.cmd` |
 | `Enable-Gitleaks.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Enable-Gitleaks.ps1` |
-| `Enable-LfsHookGuard.ps1` | Installs the LFS-guarded post-checkout/post-commit/post-merge hooks into the active core.hooksPath. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Enable-LfsHookGuard.ps1` |
 | `Ensure-AgentProject.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Ensure-AgentProject.cmd` |
 | `Ensure-AgentProject.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Ensure-AgentProject.ps1` |
+| `Export-ClaudeCloudSkills.ps1` | Project the installed harness skills and agents into a Claude Code cloud session's user folders. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Export-ClaudeCloudSkills.ps1` |
 | `Export-HarnessBackup.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Export-HarnessBackup.ps1` |
 | `Find-PromptCorpus.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Find-PromptCorpus.ps1` |
+| `FleetAgentStatusReaper.ps1` | Finds lanes whose heartbeat is older than three minutes and, after checking each lane's own evidence, closes the idle ones with a recorded reason. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool FleetAgentStatusReaper.ps1` |
+| `Format-OperatorTime.ps1` | Formats a timestamp for Douglas in America/Los_Angeles with its PST/PDT label (intent-operator-times-pacific). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Format-OperatorTime.ps1` |
 | `Get-AgentMode.ps1` | Resolves the active usage mode across environment, session, project, and machine scopes. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-AgentMode.ps1` |
+| `Get-AppProfileSuggestion.ps1` | Proposes an app profile (schema/app-profile.schema.json) from a checkout's own evidence, with a confidence per facet. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-AppProfileSuggestion.ps1` |
 | `Get-BwsInventory.ps1` | List every Bitwarden Secrets Manager project the host token can see, with each project's secret count and secret KEY NAMES. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-BwsInventory.ps1` |
 | `Get-CauseClusters.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-CauseClusters.ps1` |
 | `Get-ClaudeAccountUsage.ps1` | The per-account Claude usage ledger: how much of each pool account's five-hour and weekly window is used, when each resets, and whether the account... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-ClaudeAccountUsage.ps1` |
 | `Get-DpcLatencyTrace.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-DpcLatencyTrace.ps1` |
 | `Get-EnvironmentVariableMetadata.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Get-EnvironmentVariableMetadata.cmd` |
 | `Get-EnvironmentVariableMetadata.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-EnvironmentVariableMetadata.ps1` |
+| `Get-FinishAudit.ps1` | Codex finish audit, by month, with no hand labels: finish words, complaints and nudges per 1,000 of Douglas's messages, continuation blocks in fina... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-FinishAudit.ps1` |
 | `Get-FleetAgent.ps1` | Reads the fleet enrollment store WITHOUT taking the lock and computes the 'abandoned' status at read time exactly as SEAM 1 requires. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-FleetAgent.ps1` |
 | `Get-FleetAgentStatus.ps1` | Reads every agent status file for the project and derives liveness. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-FleetAgentStatus.ps1` |
 | `Get-FleetDispatch.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-FleetDispatch.ps1` |
@@ -712,44 +877,52 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Get-FleetSurfaceHealth.ps1` | Prints one health verdict per fleet surface, naming its source. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-FleetSurfaceHealth.ps1` |
 | `Get-HarnessFileInventory.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-HarnessFileInventory.ps1` |
 | `Get-HookBlocks.js` | (no comment-based synopsis) | `<harness-root>/tools/Get-HookBlocks.js` |
-| `Get-JulesStatus.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-JulesStatus.ps1` |
+| `Get-LiveAuthTags.ps1` | Lists live authorization tags without consuming their budgets. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-LiveAuthTags.ps1` |
 | `Get-MissionControl.js` | (no comment-based synopsis) | `<harness-root>/tools/Get-MissionControl.js` |
 | `Get-OpenCodeProviders.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-OpenCodeProviders.ps1` |
 | `Get-PeerMessageReceipt.ps1` | Reads the delivery receipt for a message sent with Send-PeerMessage.ps1, so "sent" is distinguishable from "read". | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-PeerMessageReceipt.ps1` |
 | `Get-PortConflict.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-PortConflict.ps1` |
 | `Get-ProviderQuotaUsage.ps1` | A read-out command that answers "what is left today" per surface: used, cap, remaining, reset time, and whether each figure is measured or inferred. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-ProviderQuotaUsage.ps1` |
-| `Get-RepairShopThroughput.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-RepairShopThroughput.ps1` |
 | `Get-RequestAuditEventEvidence.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-RequestAuditEventEvidence.ps1` |
+| `Get-RequirementRow.ps1` | Print Douglas's requirement rows from .agents/work/specs.jsonl: the stable read path for the HUD Scheme section. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-RequirementRow.ps1` |
 | `Get-RouteReachability.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-RouteReachability.ps1` |
+| `Get-SessionHandoff.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-SessionHandoff.ps1` |
 | `Get-SlotLedger.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-SlotLedger.ps1` |
 | `Get-StaleListener.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-StaleListener.ps1` |
 | `Get-StalePullRequests.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-StalePullRequests.ps1` |
+| `Get-StalledCodexRuns.ps1` | Sweeps Codex rollouts on both machines for threads whose last turn ended without a Stop (turn error, usage limit, reviewer breaker abort, blocked g... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-StalledCodexRuns.ps1` |
 | `Get-TokenLedger.js` | (no comment-based synopsis) | `<harness-root>/tools/Get-TokenLedger.js` |
 | `Get-UnlandedWork.ps1` | Reports unlanded agent/cloud branches and the age of the conflict queue. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-UnlandedWork.ps1` |
+| `Get-VaultMirrorStatus.ps1` | Print the vault mirror's health as one fixed status block. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-VaultMirrorStatus.ps1` |
 | `Get-WorkClusters.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-WorkClusters.ps1` |
 | `Get-WorkLanes.ps1` | Enumerate the WHOLE open set for this project and partition it into file-disjoint lanes. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-WorkLanes.ps1` |
 | `Get-WorkResume.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-WorkResume.ps1` |
 | `Get-WorkScopeStatus.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Get-WorkScopeStatus.ps1` |
 | `Gitattributes.SkillWhitespace.ws2.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Gitattributes.SkillWhitespace.ws2.ps1` |
-| `Grant-RepairShopTag.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Grant-RepairShopTag.ps1` |
+| `Grant-LocalhostAuthTag.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Grant-LocalhostAuthTag.ps1` |
+| `groq-transcribe-day.py` | (no comment-based synopsis) | `<harness-root>/tools/groq-transcribe-day.py` |
 | `groq-transcribe.py` | (no comment-based synopsis) | `<harness-root>/tools/groq-transcribe.py` |
 | `harness-folder-audit.js` | (no comment-based synopsis) | `<harness-root>/tools/harness-folder-audit.js` |
 | `HarnessMergeDriver.js` | (no comment-based synopsis) | `<harness-root>/tools/HarnessMergeDriver.js` |
+| `Import-SiteLoginToBws.ps1` | Douglas-run once per site: copy one site's login from the Bitwarden password vault into the bws project `Digital Secretary` (never created), so Upd... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Import-SiteLoginToBws.ps1` |
 | `Import-SpecLedger.ps1` | Build the tracked spec ledger (.agents/work/specs.jsonl, .agents/work/checks.jsonl) from the three id-bearing sources, and derive met status from r... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Import-SpecLedger.ps1` |
+| `Import-SpecLedger.RequestSeed.ps1` | Seed .agents/work/specs.jsonl with Douglas's requests from a requirements-ledger markdown file. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Import-SpecLedger.RequestSeed.ps1` |
+| `Import-VaultMirrorEdits.ps1` | Bring edits made in a cloud session back into the live vault, on request. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Import-VaultMirrorEdits.ps1` |
 | `Initialize-FleetAgent.ps1` | Enrolls one agent into the fleet enrollment store (SEAM 1). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Initialize-FleetAgent.ps1` |
 | `Initialize-WorkScope.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Initialize-WorkScope.ps1` |
 | `Install-AgentBackupTask.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-AgentBackupTask.ps1` |
+| `Install-ClaudeAccountSetup.ps1` | Give one manifest Claude account the same multi-claude setup as the 5970 and 4587 accounts. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-ClaudeAccountSetup.ps1` |
 | `Install-FleetQuotaRefreshTask.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-FleetQuotaRefreshTask.ps1` |
 | `Install-HarnessScheduledTask.ps1` | Registers a harness-owned scheduled task, but only when the existing task (if any) is not already equivalent to the intended definition, and downgr... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-HarnessScheduledTask.ps1` |
-| `Install-RepairShopHost.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-RepairShopHost.ps1` |
 | `Install-SecondBrainMaintenanceTasks.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-SecondBrainMaintenanceTasks.ps1` |
 | `Install-StaleAgentCleanupTask.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-StaleAgentCleanupTask.ps1` |
 | `Install-ThinkPadRemoteAccess.ps1` | Configures remote-access prerequisites (Tailscale, OpenSSH Server, RDP, power settings) on THIS machine. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Install-ThinkPadRemoteAccess.ps1` |
 | `Invoke-AgentGate.ps1` | Reports or executes the merge gate for one agent/<task> worktree. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-AgentGate.ps1` |
 | `Invoke-AgyDispatch.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-AgyDispatch.ps1` |
 | `Invoke-AgySquad.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-AgySquad.ps1` |
+| `Invoke-ChunkDriver.ps1` | Drives one chunk from builder to a merge-ready record: builder, artifact check, review rounds, fix lanes. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ChunkDriver.ps1` |
 | `Invoke-ClaudeCloudFanOut.ps1` | Turns a packet manifest into claude-cloud launch plans, in dependency order and batches of at most eight, skipping packets whose id is already in t... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ClaudeCloudFanOut.ps1` |
-| `Invoke-ClaudeCloudHarvest.ps1` | Reports, per claude-cloud lane in the ledger, whether its branch is on the remote and its pull request and state -- using gh only -- so a session w... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ClaudeCloudHarvest.ps1` |
+| `Invoke-ClaudeCloudHarvest.ps1` | Reports, per claude-cloud lane in the ledger, whether its branch is on the remote and its pull request and state -- using gh REST only (GraphQL is ... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ClaudeCloudHarvest.ps1` |
 | `Invoke-CodexCloudHarvest.ps1` | Applies one READY Codex Cloud task in a fresh cloud branch and opens its pull request. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-CodexCloudHarvest.ps1` |
 | `Invoke-CodexWorkflow.ps1` | Starts, resumes, waits for, or watches a Codex workflow through the fleet router. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-CodexWorkflow.ps1` |
 | `Invoke-Conductor.ps1` | Watch, report on, and serve a dashboard for the opencode overnight loops. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-Conductor.ps1` |
@@ -757,31 +930,24 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Invoke-DelegateBenchmark.ps1` | Delegation-routing benchmark: which delegation CLI may be trusted with which class of work. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-DelegateBenchmark.ps1` |
 | `Invoke-DiskReclaim.ps1` | Reclaims stale, unused temp trees and orphan worktree folders under the disk-floor policy. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-DiskReclaim.ps1` |
 | `Invoke-Dispatch.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-Dispatch.ps1` |
+| `Invoke-FleetRoute.ClaudeCloud.TestSupport.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-FleetRoute.ClaudeCloud.TestSupport.ps1` |
 | `Invoke-FleetRoute.ps1` | Routes one brief through the first eligible fleet surface. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-FleetRoute.ps1` |
 | `Invoke-FleetRoute.TestSupport.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-FleetRoute.TestSupport.ps1` |
 | `Invoke-GateDigest.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-GateDigest.ps1` |
 | `Invoke-GmailReadOnlyQuery.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-GmailReadOnlyQuery.ps1` |
-| `Invoke-HeavyTestAdmission.ps1` | Checks or runs a command through the one-per-machine heavy-test admission gate. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-HeavyTestAdmission.ps1` |
+| `Invoke-HeavyTestAdmission.ps1` | Checks or runs a command through the managed per-machine heavy-test pool. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-HeavyTestAdmission.ps1` |
 | `Invoke-HookMisfireDispatch.js` | (no comment-based synopsis) | `<harness-root>/tools/Invoke-HookMisfireDispatch.js` |
 | `Invoke-ImpeccableDetector.ps1` | Runs the bundled Impeccable design detector and fails closed when any target was not actually scanned. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ImpeccableDetector.ps1` |
-| `Invoke-JulesAutopilot.ps1` | Keep every Jules session moving without a human. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-JulesAutopilot.ps1` |
-| `Invoke-JulesDispatch.ps1` | Dispatches a brief to Jules using the `jules remote new` CLI. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-JulesDispatch.ps1` |
-| `Invoke-JulesTask.ps1` | Dispatches a Jules API session, or lists sources, status and results. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-JulesTask.ps1` |
 | `Invoke-LagTrap.ps1` | The lag trap. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-LagTrap.ps1` |
 | `Invoke-MuseApi.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-MuseApi.ps1` |
 | `Invoke-OpenCode.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-OpenCode.ps1` |
 | `Invoke-OverleafGit.ps1` | Run one narrowly validated Git operation against Overleaf, authenticated by OVERLEAF_GIT_TOKEN. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-OverleafGit.ps1` |
 | `Invoke-OxAlpha.ps1` | Dispatch one bounded brief to an OpenCode-hosted model with the provider/model pair pinned. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-OxAlpha.ps1` |
+| `Invoke-PeerHarnessReinstall.ps1` | Reinstall the harness on the other declared machine through an owned interactive desktop slot. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-PeerHarnessReinstall.ps1` |
 | `Invoke-PsmuxQueue.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-PsmuxQueue.ps1` |
 | `Invoke-RebaseGate.ps1` | Checks if a lane's branch has files that have changed in the default branch since the lane was branched. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RebaseGate.ps1` |
 | `Invoke-RecentlyChangedVault.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RecentlyChangedVault.ps1` |
-| `Invoke-RepairShopAdvisor.ps1` | One bounded, read-only Claude advisor call for the Repair Shop pass, recorded in the receipt. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopAdvisor.ps1` |
-| `Invoke-RepairShopBuilderDispatch.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopBuilderDispatch.ps1` |
-| `Invoke-RepairShopCheckin.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopCheckin.ps1` |
-| `Invoke-RepairShopGate.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopGate.ps1` |
-| `Invoke-RepairShopMergeReview.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopMergeReview.ps1` |
 | `Invoke-RepairShopPass.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopPass.ps1` |
-| `Invoke-RepairShopScout.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopScout.ps1` |
 | `Invoke-RepairShopTriage.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-RepairShopTriage.ps1` |
 | `Invoke-ScratchTrashReap.ps1` | Empties the scratch soft-delete trash of entries older than seven days. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-ScratchTrashReap.ps1` |
 | `Invoke-SecondBrainMaintenance.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Invoke-SecondBrainMaintenance.ps1` |
@@ -815,6 +981,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `New-AgentBrief.ps1` | Generate a bounded builder brief from measured evidence and the live ownership roster. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-AgentBrief.ps1` |
 | `New-AgentRepository.cmd` | (no comment-based synopsis) | `<harness-root>/tools/New-AgentRepository.cmd` |
 | `New-AgentRepository.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-AgentRepository.ps1` |
+| `New-AgentVeilHostSecrets.ps1` | Create the three Agent Veil host secrets at User scope when they are unset. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-AgentVeilHostSecrets.ps1` |
 | `New-CapabilityInventory.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-CapabilityInventory.ps1` |
 | `New-ClaudeAccountProfile.ps1` | Create an isolated Claude Code account profile and/or Claude Desktop shortcut. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-ClaudeAccountProfile.ps1` |
 | `New-ConductorAuth.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool New-ConductorAuth.ps1` |
@@ -826,8 +993,8 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `prompt-brief.mjs` | (no comment-based synopsis) | `<harness-root>/tools/prompt-brief.mjs` |
 | `Prune-CloudLedger.ps1` | Prunes dead entries from the cloud task ledger (cloud-tasks.jsonl). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Prune-CloudLedger.ps1` |
 | `Publish-BwsEnvSecret.ps1` | Copy named Windows environment secrets into Bitwarden Secrets Manager projects per a value-free plan; prints status lines only. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Publish-BwsEnvSecret.ps1` |
+| `Read-GapVerdict.ps1` | Reads a gap-loop verdict file by its verdict line and status cells, and reports its pass, fail, unknown and skipped counts. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Read-GapVerdict.ps1` |
 | `Read-LocalAppRoster.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Read-LocalAppRoster.ps1` |
-| `Read-RepairShopApprovals.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Read-RepairShopApprovals.ps1` |
 | `Receive-FleetRoute.ps1` | Reports or receives a Codex Cloud fleet task into a clean worktree. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Receive-FleetRoute.ps1` |
 | `Reconcile-RemoteDesktopLanes.ps1` | Reconciles Fleet Atlas remote-desktop lanes that outlived the adapter's wait. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Reconcile-RemoteDesktopLanes.ps1` |
 | `Reconcile-WorkState.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Reconcile-WorkState.ps1` |
@@ -835,6 +1002,8 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Refresh-FleetQuota.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Refresh-FleetQuota.ps1` |
 | `Register-ClaudeCloudLane.ps1` | Records one launched claude-cloud lane in the lane ledger. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Register-ClaudeCloudLane.ps1` |
 | `Register-FleetDispatch.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Register-FleetDispatch.ps1` |
+| `Register-SiteSessionRefresh.ps1` | Douglas-run once: register, remove or report the per-user scheduled task agent-site-sessions-refresh, which runs Update-SiteSessions.ps1 at logon a... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Register-SiteSessionRefresh.ps1` |
+| `Register-VaultMirrorSchedule.ps1` | Register (or remove) the nightly Scheduled Task that runs Sync-VaultMirror.ps1. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Register-VaultMirrorSchedule.ps1` |
 | `Remove-ScratchTree.ps1` | Soft-deletes a path inside THIS session's own scratchpad: renames it into a recoverable trash, destroys nothing. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Remove-ScratchTree.ps1` |
 | `Render-FleetLedger.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Render-FleetLedger.ps1` |
 | `Render-WorkViews.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Render-WorkViews.ps1` |
@@ -843,6 +1012,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Repair-QuickAccess.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Repair-QuickAccess.cmd` |
 | `Repair-QuickAccess.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Repair-QuickAccess.ps1` |
 | `Repair-ScheduledTaskWindows.ps1` | Stop the current user's scheduled tasks from opening console windows. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Repair-ScheduledTaskWindows.ps1` |
+| `Resolve-AppStandard.ps1` | Resolves an app profile to its App Standard checklist, or validates the catalog. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Resolve-AppStandard.ps1` |
 | `Resolve-CommunicationMode.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Resolve-CommunicationMode.ps1` |
 | `Resolve-DiscoveryPaths.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Resolve-DiscoveryPaths.ps1` |
 | `Resolve-OpenCodeAccountSlot.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Resolve-OpenCodeAccountSlot.ps1` |
@@ -854,34 +1024,41 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Restore-AgentWorkspace.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Restore-AgentWorkspace.ps1` |
 | `Restore-StrandedDiscoveries.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Restore-StrandedDiscoveries.ps1` |
 | `Resume-PeerSessions.ps1` | Resume what Restart-PeerWithResume.ps1 snapshotted on SYSTEMATICCHAOS before its restart. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Resume-PeerSessions.ps1` |
+| `Revoke-AuthTag.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Revoke-AuthTag.ps1` |
 | `Run-ToolTests.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Run-ToolTests.ps1` |
+| `Run-ToolTests.TestSupport.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Run-ToolTests.TestSupport.ps1` |
 | `Search-WorkScopeEvents.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Search-WorkScopeEvents.ps1` |
 | `Select-FleetSurface.ps1` | CLI over Select-FleetSurfaceDecision (SEAM 3). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Select-FleetSurface.ps1` |
 | `Select-FrontierWork.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Select-FrontierWork.ps1` |
-| `self-repair-grants.js` | (no comment-based synopsis) | `<harness-root>/tools/self-repair-grants.js` |
-| `SelfRepair.ps1` | Self-repair posture: a time-boxed procedure for fixing a blocking harness defect at its source. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool SelfRepair.ps1` |
-| `Send-PeerMessage.ps1` | Sends a file-based message to a Claude session on this or the other machine, no Remote Control needed. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Send-PeerMessage.ps1` |
-| `Send-RepairShopApproval.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Send-RepairShopApproval.ps1` |
+| `Send-PeerMessage.ps1` | Sends a file-based message to a Claude session on this or a remote machine, no Remote Control needed. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Send-PeerMessage.ps1` |
 | `Serve-DesignSpaceExplorer.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Serve-DesignSpaceExplorer.ps1` |
 | `Set-AgentMode.ps1` | Persists the usage mode at machine, project, or session scope. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-AgentMode.ps1` |
 | `Set-BwsMachineToken.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-BwsMachineToken.ps1` |
 | `Set-ClaudeAccountToken.ps1` | Sets up, removes or reports a Claude account's headless token (SPEC S-claude-headless-token-auth). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-ClaudeAccountToken.ps1` |
 | `Set-ClaudeUsageState.ps1` | Saves Claude plan usage figures to the shared usage-state file that Get-ProviderQuotaUsage.ps1 and usage-limit.js read. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-ClaudeUsageState.ps1` |
 | `Set-LaneSparseCheckout.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-LaneSparseCheckout.ps1` |
+| `Set-RequestDisposition.mjs` | (no comment-based synopsis) | `<harness-root>/tools/Set-RequestDisposition.mjs` |
 | `Set-SkillVisibility.ps1` | Project `manifests\skill-visibility.json` onto every canonical skill's frontmatter. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-SkillVisibility.ps1` |
+| `Set-VercelBuildPolicy.ps1` | Audits or applies the Vercel build-cost policy to every project in a team, through the signed-in Vercel CLI. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-VercelBuildPolicy.ps1` |
+| `Set-VercelEnvFromSecret.ps1` | Set one Vercel project environment variable for one target from a named process environment variable, through the signed-in vercel CLI. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-VercelEnvFromSecret.ps1` |
 | `Set-WorkFrontier.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Set-WorkFrontier.ps1` |
 | `Show-DiskFloorStatus.ps1` | The disk-floor health line: free space against the floor, and with -Owners what the harness could reclaim. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Show-DiskFloorStatus.ps1` |
 | `Show-ToolHelp.ps1` | Prints one harness tool's comment-based help without running it. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Show-ToolHelp.ps1` |
 | `Splice-WorkStateEventChains.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Splice-WorkStateEventChains.ps1` |
 | `sqlite_project_data.py` | (no comment-based synopsis) | `<harness-root>/tools/sqlite_project_data.py` |
 | `Start-AccountProxySession.ps1` | Start a Claude Code proxy session for one account in a psmux pane, so a session on another account can message it. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-AccountProxySession.ps1` |
+| `Start-AgentVeilSandboxHost.ps1` | Start the Agent Veil sandbox host in WSL Ubuntu in the foreground. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-AgentVeilSandboxHost.ps1` |
 | `Start-AppSupervisor.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-AppSupervisor.ps1` |
 | `Start-BackgroundRun.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-BackgroundRun.ps1` |
+| `Start-BwUnlockBroker.ps1` | Douglas-run ONCE: unlock Bitwarden (bw), cache the login, and keep a broker on a per-user named pipe so later tools never ask for the master passwo... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-BwUnlockBroker.ps1` |
+| `Start-ClaudeAccount.ps1` | `ca`: open an interactive Claude Code session on one named Claude account on this machine. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-ClaudeAccount.ps1` |
+| `Start-ClaudeAccountAutoLogin.ps1` | Semi-automatic Claude CLI sign-in for an account folder: opens the login URL in a throwaway Chrome profile, fetches the sign-in code from the accou... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-ClaudeAccountAutoLogin.ps1` |
 | `Start-DesignSpaceExplorer.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-DesignSpaceExplorer.ps1` |
 | `Start-FleetAtlas.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-FleetAtlas.ps1` |
 | `Start-FleetLane.ps1` | Typed launcher for background and foreground fleet lanes. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-FleetLane.ps1` |
 | `Start-RepairShopConductor.ps1` | Launches one Repair Shop conductor cycle on the authority host. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-RepairShopConductor.ps1` |
 | `Start-RouteRepairLane.ps1` | Sends a tactician to diagnose and fix a free fleet route that is down. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-RouteRepairLane.ps1` |
+| `Start-SiteLogin.ps1` | Douglas-run only: sign one site's dedicated browser profile in from Bitwarden. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Start-SiteLogin.ps1` |
 | `Stop-DesignSpaceExplorer.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Stop-DesignSpaceExplorer.ps1` |
 | `Sync-AgentRepositories.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-AgentRepositories.ps1` |
 | `Sync-ClaudeAgents.ps1` | Project the subagent definitions a canonical skill ships into Claude Code's agent root. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-ClaudeAgents.ps1` |
@@ -892,7 +1069,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Sync-DvcProjectData.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-DvcProjectData.ps1` |
 | `Sync-HarnessToVault.ps1` | One-way sync, installed harness -> one generated, read-only folder in the Obsidian vault. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-HarnessToVault.ps1` |
 | `Sync-PortableContract.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-PortableContract.ps1` |
-| `Sync-RepairShopDispositions.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-RepairShopDispositions.ps1` |
+| `Sync-SchemeFile.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-SchemeFile.ps1` |
 | `Sync-SqliteProjectData.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-SqliteProjectData.ps1` |
 | `Sync-VaultMirror.ps1` | Refresh the private GitHub mirror of the Obsidian vault. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-VaultMirror.ps1` |
 | `Sync-VaultToDocket.ps1` | Counts vault-authored open decisions for diagnostics, and pushes only mass-batch vault notes into the Docket. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Sync-VaultToDocket.ps1` |
@@ -907,6 +1084,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-BrevityKeepsReasoning.ps1` | Prove every contract that caps output also says the cap does not apply to reasoning. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-BrevityKeepsReasoning.ps1` |
 | `Test-BriefDemandsSilence.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-BriefDemandsSilence.ps1` |
 | `Test-BriefDocs.ps1` | Mechanically enforces VAULT-PROTOCOL.md's Brief quality rule against every brief in the vault, so the wall-of-prose defect Douglas named is checked... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-BriefDocs.ps1` |
+| `Test-BriefRequirementRows.ps1` | Refuses a brief for a product with requirement rows unless it carries every open or built row of that product. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-BriefRequirementRows.ps1` |
 | `Test-BrowserPreflight.ps1` | One-verdict browser preflight: extension connected, viewport not 0x0, account signed in, route named. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-BrowserPreflight.ps1` |
 | `Test-CapabilityReach.ps1` | Report harness capabilities that an agent cannot reach from its read surfaces. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CapabilityReach.ps1` |
 | `Test-CapabilityRouterHygiene.ps1` | Refuse capability-router manifests that lose machine-scoped availability evidence. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CapabilityRouterHygiene.ps1` |
@@ -914,6 +1092,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-CheckoutSafety.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CheckoutSafety.ps1` |
 | `Test-ClaudeAccounts.ps1` | Report, per Claude account the manifest declares for this machine, whether its profile folder is signed in as the expected email and organization. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeAccounts.ps1` |
 | `Test-ClaudeAutoMode.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeAutoMode.ps1` |
+| `Test-ClaudeCloudReadiness.ps1` | Claude cloud readiness gate: newest probe evidence per environment -> ready, or the failing capabilities. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeCloudReadiness.ps1` |
 | `Test-ClaudeSafeguards.ps1` | Live proof that the harness PreToolUse hook refuses destructive commands under the Repair Shop conductor's exact claude -p flags (CONDUCTOR-PLAN.md... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeSafeguards.ps1` |
 | `Test-ClaudeSettingsPolicy.ps1` | Checks tracked files, and optionally a live Claude settings file, against .agents/manifests/claude-settings-policy.json. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeSettingsPolicy.ps1` |
 | `Test-ClaudeSubagentsReviewOnly.ps1` | Prove the Claude subagent admission rule is stated where an agent reads it, and that no dispatch brief in the repository sends a Claude subagent to... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ClaudeSubagentsReviewOnly.ps1` |
@@ -921,6 +1100,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-CodexSafeguards.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CodexSafeguards.ps1` |
 | `Test-CollectionSafety.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CollectionSafety.ps1` |
 | `Test-CommandCitations.ps1` | Fails when a command or skill file cites a home-relative path that does not exist. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CommandCitations.ps1` |
+| `Test-ConductorCapacity.ps1` | Checks a conductor or longrun loop state file before the pass ends, and exits nonzero when launchable work is unlaunched, an overdue lane is not re... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ConductorCapacity.ps1` |
 | `Test-ContractBudget.ps1` | Gate always-loaded contract shape and presence; measure load without size or count caps. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ContractBudget.ps1` |
 | `Test-ContractLoaderChain.ps1` | Prove every environment's loader chain yields the full contract rule set, and yields it once. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ContractLoaderChain.ps1` |
 | `Test-CorrectionHasACheck.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-CorrectionHasACheck.ps1` |
@@ -940,6 +1120,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-DiscoveryCapabilityRefs.ps1` | A read-only sweep over canonical Work Scope state that checks every backburner discovery's `suggested_capability` field against the capability ids ... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DiscoveryCapabilityRefs.ps1` |
 | `Test-DispatchCompliance.ps1` | The mechanical half of .agents/DISPATCH-CHECKLIST.md: scans the checked-out repository for dispatch call sites that name no model, profile, or role... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DispatchCompliance.ps1` |
 | `Test-DispatchDocsSufficient.ps1` | Grades the S-dispatch-docs-sufficient eval: did a fresh agent, given only a request and the fleet documents, dispatch parallel lanes correctly? | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DispatchDocsSufficient.ps1` |
+| `Test-DisplayDriverLeak.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DisplayDriverLeak.ps1` |
 | `Test-DocketMirrorType.ps1` | Reports whether the type: value DocketVaultMirror.psm1 writes into every mirror note's frontmatter is one the vault schema declares. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DocketMirrorType.ps1` |
 | `Test-DocRouting.ps1` | Check that every harness markdown document is reachable by an agent that needs it. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DocRouting.ps1` |
 | `Test-DuplicateObligations.ps1` | Reports likely duplicated imperative obligations across the selected corpus. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-DuplicateObligations.ps1` |
@@ -960,15 +1141,18 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-HarnessPathClaims.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-HarnessPathClaims.ps1` |
 | `Test-HarnessSetup.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Test-HarnessSetup.cmd` |
 | `Test-HarnessSetup.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-HarnessSetup.ps1` |
+| `Test-HudHealth.ps1` | Reports, per live Claude session, which harness-hud build is loaded, whether it matches master's, and whether it drew recently. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-HudHealth.ps1` |
 | `Test-IndexCurrent.ps1` | Checks whether the generated harness index (INDEX.md) and related routing surfaces are current. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-IndexCurrent.ps1` |
 | `Test-InstalledHookFreshness.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-InstalledHookFreshness.ps1` |
 | `Test-InstallGlobalScoping.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-InstallGlobalScoping.ps1` |
 | `Test-IntentPlacement.ps1` | Require project intent at the repository root and reject a harness-global intent file. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-IntentPlacement.ps1` |
 | `Test-IrreversibleAuthorization.ps1` | Static verifier for `no-irreversible-act-without-explicit-authorization`. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-IrreversibleAuthorization.ps1` |
-| `Test-JulesDelivery.ps1` | Fails a Jules pull request whose every changed file is generated or scratch. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-JulesDelivery.ps1` |
+| `Test-LaneStall.ps1` | Says, per claude-cloud lane, which branch it should be watched on, when that branch last moved, and whether the lane has stalled. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-LaneStall.ps1` |
 | `Test-LongrunOvernightAlias.ps1` | Asserts longrun's arming, supervision and Drive clause, and that the retired overnight package stays merged into longrun. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-LongrunOvernightAlias.ps1` |
+| `Test-LoopContract.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-LoopContract.ps1` |
 | `Test-MergeDidNotDelete.ps1` | Refuses a merge commit that silently dropped a top-level symbol neither side authored a deletion for. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-MergeDidNotDelete.ps1` |
 | `Test-MergedUnitsLanded.ps1` | Fail when a pull request marked MERGED is not reachable from the default branch. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-MergedUnitsLanded.ps1` |
+| `Test-MergeReady.ps1` | Merge-ready gate: would this branch pass review? | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-MergeReady.ps1` |
 | `Test-NoTrackedIgnoredFiles.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-NoTrackedIgnoredFiles.ps1` |
 | `Test-NoVisibleNodeSpawn.ps1` | Fails when a harness Node script spawns a child process that would paint a terminal window. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-NoVisibleNodeSpawn.ps1` |
 | `Test-NoVisibleProcessLaunch.ps1` | Fails when a harness script launches a background process that would paint a terminal window. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-NoVisibleProcessLaunch.ps1` |
@@ -976,18 +1160,19 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-PeerReachability.ps1` | Bounded, layered SYSTEMATICCHAOS reachability probe with fleet-health integration. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PeerReachability.ps1` |
 | `Test-PermissionApprovalBatching.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PermissionApprovalBatching.ps1` |
 | `Test-PermissionBatching.js` | (no comment-based synopsis) | `<harness-root>/tools/Test-PermissionBatching.js` |
+| `Test-PolicyConsistency.ps1` | Deterministic lint: every restatement of a policy fact must agree with the file that owns the fact. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PolicyConsistency.ps1` |
 | `Test-PowerShellParse.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PowerShellParse.ps1` |
 | `Test-ProductReadiness.ps1` | Checks harness loader parity: that the Claude and Codex loader files exist and match. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ProductReadiness.ps1` |
 | `Test-ProjectDataTransport.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ProjectDataTransport.ps1` |
 | `Test-ProjectWorkScopeRuntime.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ProjectWorkScopeRuntime.ps1` |
 | `Test-ProtocolRouting.ps1` | Verify that every protocol directly under .agents is routed by both loaded contracts. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ProtocolRouting.ps1` |
 | `Test-ProviderAvailable.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ProviderAvailable.ps1` |
-| `Test-PrSpecsChecked.ps1` | Fails when a pull request body lacks a non-empty "Specs checked:" list. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PrSpecsChecked.ps1` |
+| `Test-PrSpecsChecked.ps1` | Fails when a pull request body lacks a non-empty "Specs checked:" list, or lacks a "Requirement rows:" list (or a "Not a requirement: <reason>" line). | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PrSpecsChecked.ps1` |
 | `Test-PwshReachability.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-PwshReachability.ps1` |
 | `Test-QualificationFreshness.ps1` | Verifies every qualification status in .agents/roles/classes.json carries its freshness field. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-QualificationFreshness.ps1` |
 | `Test-QueueRetirement.ps1` | Verifies a queue retirement proposal: solved backburner items by commit ancestry, and open pull requests whose work already landed. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-QueueRetirement.ps1` |
 | `Test-RebaseGate.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-RebaseGate.ps1` |
-| `Test-RepairShopHost.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-RepairShopHost.ps1` |
+| `Test-RequirementRowCheck.ps1` | A requirement row cannot be `built` (or `landed`, `seen`) with a null `check`; the check must resolve on disk. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-RequirementRowCheck.ps1` |
 | `Test-ResourceHeadroom.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ResourceHeadroom.ps1` |
 | `Test-RetiredNames.ps1` | Fail when a harness document names something retired, unless the mention is baselined. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-RetiredNames.ps1` |
 | `Test-ReversibleAssumption.ps1` | Verifier for `a-reversible-assumption-beats-a-stop`. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-ReversibleAssumption.ps1` |
@@ -996,6 +1181,7 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Test-SentenceEarnsItsPlace.ps1` | Report sentences in authored harness markdown that change no reader's action. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SentenceEarnsItsPlace.ps1` |
 | `Test-SiteReadiness.axe.mjs` | (no comment-based synopsis) | `<harness-root>/tools/Test-SiteReadiness.axe.mjs` |
 | `Test-SiteReadiness.ps1` | Mechanical presence checks for a site: SEO tags, privacy/terms pages, 404 page, security headers, axe, core web vitals, deployed URL. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SiteReadiness.ps1` |
+| `Test-SiteSessions.ps1` | Agent-runnable check of each site's dedicated signed-in browser profile. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SiteSessions.ps1` |
 | `Test-SkillAssetRoutes.ps1` | Resolve every relative asset reference inside a skill package's shipped files against disk. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SkillAssetRoutes.ps1` |
 | `Test-SkillBindingCoverage.ps1` | Prove every capability the baseline skill manifest declares still has a binding in the project template that generates a new project's skills-manif... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SkillBindingCoverage.ps1` |
 | `Test-SkillEditRecordsExistence.ps1` | Report skill-touching commits whose message records no judgment on whether the edited skill should continue to exist, merge into another, or retire. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Test-SkillEditRecordsExistence.ps1` |
@@ -1021,10 +1207,12 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Update-SecretManifest.cmd` | (no comment-based synopsis) | `<harness-root>/tools/Update-SecretManifest.cmd` |
 | `Update-SecretManifest.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-SecretManifest.ps1` |
 | `Update-SetupGuideIndex.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-SetupGuideIndex.ps1` |
+| `Update-SiteSessions.ps1` | Unattended refresher: keeps every active `refresh: "bws"` site signed in from the bws project `Digital Secretary`. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-SiteSessions.ps1` |
 | `Update-SkillAttestation.ps1` | Report or re-cut the local tree attestation for a pinned skill package. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-SkillAttestation.ps1` |
 | `Update-StatusBoard.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-StatusBoard.ps1` |
 | `Update-WorkState.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Update-WorkState.ps1` |
 | `Verify-VaultLinks.ps1` | Obsidian vault link-integrity gate. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Verify-VaultLinks.ps1` |
+| `voice-corpus-extract.py` | (no comment-based synopsis) | `<harness-root>/tools/voice-corpus-extract.py` |
 | `Watch-AgentRuns.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Watch-AgentRuns.ps1` |
 | `Watch-CloudTasks.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Watch-CloudTasks.ps1` |
 | `Watch-ProviderQuota.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Watch-ProviderQuota.ps1` |
@@ -1032,11 +1220,12 @@ runtimes carry their exact path because they have no shared, side-effect-free he
 | `Watch-WindowOpens.ps1` | Records every top-level window that APPEARS while this runs, with the owning process, its parent chain and its command line. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Watch-WindowOpens.ps1` |
 | `Write-DesignReviewReceipt.ps1` | Writes a design-review receipt under .agents/work/evidence, in the shape Invoke-SpecCheck.ps1 writes for spec checks, so readiness can show when a ... | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Write-DesignReviewReceipt.ps1` |
 | `Write-FleetAgentStatus.ps1` | Writes a per-agent status file atomically. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Write-FleetAgentStatus.ps1` |
+| `Write-ReadinessReceipt.ps1` | Writes a dated readiness receipt for an App Standard agent or judge item under <app>/.agents/work/evidence. | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool Write-ReadinessReceipt.ps1` |
 | `ws.ps1` | (no comment-based synopsis) | `& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File <harness-root>/tools/Show-ToolHelp.ps1 -Tool ws.ps1` |
 
 ## Retired paths and names
 
-`manifests/retired-paths.json` is authoritative: **138 retired paths** and **67 retired names**. Retiring something means adding its entry in the same commit; `Test-HarnessPathClaims.ps1` and `Test-RetiredNames.ps1` (``& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File .agents/tools/Test-RetiredNames.ps1 -RepoRoot <path>``) enforce it.
+`manifests/retired-paths.json` is authoritative: **232 retired paths** and **66 retired names**. Retiring something means adding its entry in the same commit; `Test-HarnessPathClaims.ps1` and `Test-RetiredNames.ps1` (``& 'C:\Program Files\PowerShell\7\pwsh.exe' -NoProfile -NonInteractive -File .agents/tools/Test-RetiredNames.ps1 -RepoRoot <path>``) enforce it.
 
 ## Interface design route
 
@@ -1123,9 +1312,9 @@ evidence yet shows it costs anything. Source: <https://cursor.com/docs/skills.md
 
 - Measured list budget: **21,502 characters** (`codex debug prompt-input`, 2026-09-28, codex-cli 0.155.0, gpt-6-astra).
 - Codex system + plugin skills consume **2,623**, leaving **18,879** for canonical skills.
-- The 112 canonical skills currently cost **17,398 characters**.
+- The 117 canonical skills currently cost **15,887 characters**.
 - 1 skill(s) set `disable-model-invocation: true` and cost nothing: `correct`. They stay invokable as `/name` on Claude and Codex but never appear in the model-visible listing -- by design, not by cap.
-- **Under budget with 1,481 characters of headroom. All 112 canonical skills are visible to Codex.**
+- **Under budget with 2,992 characters of headroom. All 117 canonical skills are visible to Codex.**
 
 ### Claude budget math
 
@@ -1135,14 +1324,14 @@ default everyone reports. It is not on the official skills page; it is stated in
 <https://github.com/anthropics/claude-code/issues/64606>. `SLASH_COMMAND_TOOL_CHAR_BUDGET`
 overrides the whole computation with a fixed count when set.
 
-- This device: 200,000 tokens x 4 x 0.06 = **48,000 characters**. The fraction is per-device and product-owned; `InstallGlobal` does not reproduce it, so another machine needs it set by hand and this arithmetic re-checked.
-- Claude reads `description` **and** `when_to_use`, so an entry here weighs far more than the same entry on Codex. The 112 canonical skills cost **33,915 characters** -- 1.9x their Codex weight.
+- This device: 200,000 tokens x 4 x 0.06 = **48,000 characters**. The fraction is per-device and product-owned; `InstallGlobal` does not reproduce it, so a different machine needs it set by hand and this arithmetic re-checked.
+- Claude reads `description` **and** `when_to_use`, so an entry here weighs far more than the same entry on Codex. The 117 canonical skills cost **12,774 characters** -- 0.8x their Codex weight.
 - **There are no command files left to share the budget with.** `<repo>\commands\` holds only
   its `RETIRED.md`, so the shared-budget question that used to change this arithmetic by the
   whole answer -- one formatter over one list, or two -- is moot on this tree. It returns the
   moment a command file does, including one written by hand into `~\.claude\commands\`, which
   no generator here reproduces or sees.
-- **Headroom: 33,915 used of 48,000, leaving 14,085 characters** -- about **46 more model-visible skills** at the current 306-character mean entry. A user-only skill costs nothing and is not on this count at all, which is why 1 of the 112 canonical skills are absent from it.
+- **Headroom: 12,774 used of 48,000, leaving 35,226 characters** -- about **320 more model-visible skills** at the current 110-character mean entry. A user-only skill costs nothing and is not on this count at all, which is why 1 of the 117 canonical skills are absent from it.
 
 ## Canonical skills
 
@@ -1162,118 +1351,123 @@ they agree: one is computed from `surfaces:` and the other from the character ca
 
 | Skill | Purpose | Claude | Codex |
 |---|---|---|---|
-| `assets` | Maintain a small append-only index of reusable produced assets. | yes | yes |
-| `boss-update` | Roll daily reports over a date range into an upward, outcome-only status update for a boss or advisor. | yes | yes |
-| `brainstorming` | Use before any creative work -- a new feature, component, or behavior change -- to explore intent, requirements, and design first. | yes | yes |
-| `brandkit` | Generate premium brand-kit imagery: logo systems, identity decks, guideline boards. | yes | yes |
-| `browser-use` | Use when driving a browser or webview for live UI work where session state, user-authored content, downloads, timeouts, or multiple browser surfaces. | yes | yes |
-| `burnout` | Spend remaining usage productively through the bounded frontier loop before a limit reset. | yes | yes |
-| `caltime` | Log Douglas's weekly Berkeley AI-tutor hours in TRS: pick blocks from his calendar, enter and save, never submit. | yes | yes |
-| `canvas-sync` | Launch one xhigh Haiku agent to diff Canvas against the courses app, then update the app, Obsidian notes and Todoist. | yes | yes |
-| `clean` | Use for cleanup of documents (vault, notes, skills, briefs) or source code (dead code, duplication, module boundaries, debt). | yes | yes |
-| `clean-downloads` | Sort new Downloads files into existing Google Drive folders, quarantine sensitive ones, delete junk. | yes | yes |
-| `cloud-protocol` | Use before dispatching, monitoring, or landing a Codex Cloud task: environment setup, remote preflight, host verification, and the. | yes | yes |
-| `codex-cloud-environment` | Create and verify one Codex Cloud environment through a one-call Haiku browser agent. | yes | yes |
-| `compare-options` | Compare concrete options for a tool, approach, or design choice using evidence and explicit tradeoffs. | yes | yes |
-| `condense` | Use when a paper must be shortened in its authors' words or re-shown as an outline, visual set, or poster. | yes | yes |
-| `connect` | Choose and plan the smallest useful CLI, MCP, HTTP, or library integration surface for an app. | yes | yes |
-| `correct` | Use when Douglas reports a correction, repeated defect, unsafe omission, or a safeguard that did not fire. | `/name` only | `/name` only |
-| `craft` | Use for any design operation: create or edit interfaces, critique, visual systems, tokens, type, color, slides, or brands. | yes | yes |
-| `daily-activity` | Produce a report-only daily activity summary with outcomes, debugging arcs, and follow-up opportunities. | yes | yes |
-| `debloat` | Use when sweeping a system for unnecessary or pointless things — dead paths, unread config, orphan packages, unconsumed jobs — where the finding. | yes | yes |
+| `boss-update` | Roll daily reports over a date range into an outcome-only update for a boss/advisor. | yes | yes |
+| `brainstorming` | Before creative work (new feature, component, behavior change): explore design. | yes | yes |
+| `brandkit` | Brand-kit imagery: logo systems, identity decks, guideline boards. | yes | yes |
+| `browser-use` | Drive a browser or webview for live UI work: sessions, downloads, timeouts, surfaces. | yes | yes |
+| `burnout` | Burn down remaining usage on safe queued work before a limit reset. | yes | yes |
+| `caltime` | Log Berkeley AI-tutor hours in TRS, CalTime, timesheet, MECENG 102B; save, never submit. | yes | yes |
+| `canvas-sync` | Diff Canvas (bCourses) vs courses app, Obsidian, Todoist; INFO 272, CS 260B changes. | yes | yes |
+| `clean` | Clean up docs (vault, notes, skills, briefs, README) or code (dead code, duplication). | yes | yes |
+| `clean-downloads` | Sort Downloads into Drive folders, quarantine sensitive files, delete junk. | yes | yes |
+| `cloud-protocol` | Start or resume Codex cloud work with existing task state; dispatch, monitor and land cloud tasks. | yes | yes |
+| `codex-cloud-environment` | Reconcile modern Codex Cloud configurations or create and verify a legacy environment. | yes | yes |
+| `compare-options` | Pick one among named tools, skills, frameworks or design variants using evidence. | yes | yes |
+| `condense` | Shorten a research paper in authors' words or re-show as outline, visuals, poster. | yes | yes |
+| `connect` | Plan the smallest CLI, MCP, HTTP or library integration surface before adding one; build the CLI or MCP server. | yes | yes |
+| `correct` | Douglas reports a correction, repeated defect, unsafe omission or safeguard that missed. | `/name` only | `/name` only |
+| `craft` | Any design work: interfaces, critique, visual systems, tokens, type, color, slides, brand. | yes | yes |
+| `daily-activity` | Write the internal per-day report: what was built, broke, and should be automated. | yes | yes |
+| `debloat` | Sweep a system for pointless things: dead paths, unread config, orphan packages, jobs; harness decay sweep. | yes | yes |
 | `deep-search` | Multi-step cited web research for open questions needing 3+ sources. | yes | yes |
-| `design-review` | Review a built interface's information architecture, usability, and visual hierarchy; return prioritized findings only. | yes | yes |
-| `detective` | Use when investigating patterns across many recent agent sessions, transcripts, or work records. | yes | yes |
-| `discussion-prep` | Prepare evidence-linked cards, questions, briefs, and slides from mixed discussion materials. | yes | yes |
-| `environment-preflight` | Run a cheap, evidence-based readiness audit before substantial project work. | yes | yes |
-| `evolve` | Use when improving a tool by doing real work with it: dogfooding, friction logs, 'test it by using it', self-hosted harness changes. | yes | yes |
-| `fleet` | Dispatch, delegate, launch, route, and harvest agents through the fleet router. | yes | yes |
-| `frontend-slides` | Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. | yes | yes |
-| `frontier` | Use when open-ended work needs repeated, user-directed choices about the next improvement direction. | yes | yes |
-| `full-output-enforcement` | Force complete, unabridged code output: no placeholders, no elisions, clean handling of token-limit splits. | yes | yes |
-| `fullscope` | Use when Douglas says 'full scope' or gives a short build ask like 'make an app': expand it to a 50-200 item scope brief, then build it canary-first. | yes | yes |
-| `goal-engineer` | Author measurable, bounded goals that unattended work can consume and verify. | yes | yes |
-| `grill-me` | Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. | yes | yes |
-| `harness-review` | Adversarially review a harness or code target for edge cases, unsafe assumptions, and missing evidence, or sweep the whole harness for decay. | yes | yes |
-| `hone` | Measure, isolate, and verify one performance improvement at a time; keep only gains proven against a baseline. | yes | yes |
-| `html-slides` | Single-file HTML decks with a component library: flip cards, charts, tables, timelines, themes. | yes | yes |
-| `hue` | Generate a new design-language skill from a brief, screenshot, or an existing skill to remix. | yes | yes |
-| `image-artist` | Route image-generation work to the matching brand, web, or mobile owner, or to the image-to-code craft leaf; generate nothing itself. | yes | yes |
-| `imagegen-frontend-mobile` | Elite mobile app image-generation skill for creating premium, app-native screen concepts and flows. | yes | yes |
-| `imagegen-frontend-web` | Generate premium, conversion-aware website section reference images, one image per section. | yes | yes |
-| `impeccable` | Frontend interface work of any kind: design, redesign, critique, audit, or polish a site, app, dashboard, or component. | yes | yes |
-| `index` | The one entry point for NEW vault material — a source, topic, or question. | yes | yes |
-| `ingest` | Route new material to vault or recording ingestion by source type; perform no ingestion itself. | yes | yes |
-| `investigate` | Find the root cause and full impact of one specific incident using authoritative evidence. | yes | yes |
-| `janitor` | Audit this machine's processes, sessions, ports, and memory; prepare safe cleanup evidence. | yes | yes |
-| `jules-protocol` | Use for one Jules API task from preflight through artifact verification, including the credential-by-name-only rule and the pushed-branch. | yes | yes |
+| `design-language` | Check a project's design language is complete and followed: voice, motion, imagery, icons, rhythm, data-viz, brand, tokens. | yes | yes |
+| `design-review` | Critique a built interface: IA, usability, visual hierarchy; findings only. | yes | yes |
+| `design-system` | Build or audit a design system from the codebase: tokens, type, color, spacing, components, states, with gaps. | yes | yes |
+| `detective` | Sweep many agent sessions, transcripts or work records for a recurring pattern. | yes | yes |
+| `discussion-prep` | Seminar, journal club, meeting prep: cards, questions, briefs, slides. | yes | yes |
+| `doordash-bogo` | DoorDash BOGO / buy-one-get-one deals on mains saving $7+; daily deal scan, DashPass-exclusive check, deal history log. | yes | yes |
+| `examine` | Examine (was review): route a code, diff, UI, harness or skill review to its one owner, or run it. | yes | yes |
+| `fleet` | Dispatch, delegate, launch, route, harvest agents; Codex Cloud, agy, Cursor, opencode. | yes | yes |
+| `forms` | '/forms', 'fill the form', 'the form editor': fill, read, validate, export Douglas's forms and fillable PDFs. | yes | yes |
+| `frontend-slides` | Animation-rich HTML presentations from scratch or converted from PPT/PPTX. | yes | yes |
+| `frontier` | Develop one target over several legs, Douglas picking each direction; --research for cited research. | yes | yes |
+| `full-output-enforcement` | Force complete, unabridged code output; no placeholders or elisions. | yes | yes |
+| `fullscope` | 'fullscope', 'full scope', 'go big', 'make me an app': expand a short build ask into a 50-200 item brief, canary-first. | yes | yes |
+| `gap-loop` | Loop fresh tester, design reviewer and intent judge over a running product until it has everything Douglas asked for. | yes | yes |
+| `get-it-together` | Self-audit this session or loop against harness rules, Douglas's rulings, requirements, waste and other checks, then fix. | yes | yes |
+| `ghostwriter` | 'Ghostwriter', 'put this in my voice', 'voice this', 'de-AI this draft': re-voice existing prose in Douglas's voice. | yes | yes |
+| `goal-engineer` | 'Give me a new goal', 'output a goal', 'check whether my goal needs updating': measurable goals, verifiers, retirement. | yes | yes |
+| `grill-me` | Stress-test a plan or design by relentless interview; \"grill me\". | yes | yes |
+| `handoff` | Hand a session off: switch Claude accounts at a usage limit, move to syschaos, or end a session. | yes | yes |
+| `hone` | '/hone', 'make it faster', 'where is the bottleneck': profile, baseline, measured performance work. | yes | yes |
+| `html-slides` | Single-file HTML slide decks: flip cards, charts, timelines, /html-slides. | yes | yes |
+| `hue` | Generate a design-language skill from a brief, screenshot, or skill to remix. | yes | yes |
+| `image` | Route generated-imagery work to the brand, web, mobile or image-to-code owner. | yes | yes |
+| `imagegen-frontend-mobile` | iOS/Android app screen concept images in phone mockups; no code. | yes | yes |
+| `imagegen-frontend-web` | Website section reference images, one per section. | yes | yes |
+| `impeccable` | Frontend design, redesign, critique, audit, polish: site, app, dashboard, UI. | yes | yes |
+| `index` | Entry point for NEW vault material: source, topic, or question. | yes | yes |
+| `ingest` | Alias: a way into index's route-by-source-type section for new vault material. | yes | yes |
+| `intent` | Check Douglas's rulings against INTENT.md and the requirements record (check, default), or record new ones (write): 'record that', 'write to intent'. | yes | yes |
+| `investigate` | Root cause and full impact of one incident: crash, race, hook failure, missing files. | yes | yes |
+| `janitor` | Audit machine processes, sessions, ports, memory; safe cleanup evidence. | yes | yes |
 | `learn` | Learn a practical craft or workflow from current primary and practitioner evidence. | yes | yes |
-| `lego` | Catalog proven, reusable implementation patterns from real source files into a cited LEGO.md library. | yes | yes |
-| `librarian` | Use when maintaining, auditing, consolidating, or repairing Douglas's Obsidian vault, especially link, corpus, archive, or navigation drift. | yes | yes |
-| `longrun` | Arm and operate a long unattended project run with durable state, supervision, recurring self-checks, and safe approval handling. | yes | yes |
-| `loop-engineer` | Use when authoring, checking, arming, revising, or debugging a bounded agent loop contract. | yes | yes |
-| `loop-protocol` | Use before authoring, arming, revising, or debugging a recurring agent run. | yes | yes |
-| `machine-ops` | Route a fault in this Windows host itself to the versioned tool that repairs it, and to janitor when the answer is measurement. | yes | yes |
-| `make-api` | Design, build, and live-test a small HTTP API with an explicit contract and safe operational defaults. | yes | yes |
-| `make-cli` | Design and implement a reliable command-line interface for a defined local or service workflow. | yes | yes |
-| `make-mcp` | Build and verify an MCP server after validating that an existing server cannot meet the need. | yes | yes |
-| `mastermind` | Choose the next planning or exploratory move across projects and agent threads; run no work itself. | yes | yes |
-| `mission-control` | One-glance status of this machine and every project: what needs attention, what's filed, machine health. | yes | yes |
-| `modernize` | Find current harness or ecosystem changes that plausibly improve one existing codebase. | yes | yes |
-| `multi-claude` | Use when configuring, launching, or piloting multiple Claude accounts that share one harness on one or more Windows machines. | yes | yes |
-| `news-digest` | Build and refresh Douglas's persistent AI, design, and technology news digest from authorized inbox and public sources. | yes | yes |
-| `notes` | Write notes, student docs, or quick messages in Douglas's human note voice: terse, lowercase, skimmable. | yes | yes |
-| `onboard` | Make a codebase or application legible with an evidence-backed developer explainer or in-app help. | yes | yes |
-| `orchestration-protocol` | Use for conductor lifecycle, bounded delegation, independent verification, and integration evidence: one writer, one proving command, one. | yes | yes |
-| `package` | Package a repository as portable and clean-clone-verified. | yes | yes |
-| `paper-read` | Use when one research paper must be read closely enough to argue with it, not summarized. | yes | yes |
-| `pathway` | Run a named, ordered chain of existing skills from the pathway registry against one target. | yes | yes |
-| `plan` | Turn a prompt brief into a one-reply approval packet and Work Scope tasks: units, routing, approvals, loops. | yes | yes |
-| `present` | Test whether a rendered interface communicates both its concrete data and its intended takeaway to a fresh viewer. | yes | yes |
-| `probe` | Measure test effectiveness through risk-led coverage gaps, properties, and mutation testing where applicable. | yes | yes |
-| `prompt` | Turn a raw or rambling prompt into a structured, harness-enriched brief with cited context and stop conditions. | yes | yes |
-| `queue` | Use when a defect or idea belongs in a project's discovery queue for later work. | yes | yes |
-| `recon` | Map a field, mirror what Douglas already does, and hand him a Have/Partial/Gap comparison plus forward paths. | yes | yes |
-| `recording-ingest` | Turn a recording or its transcript into an attributed extraction -- summary, every task and commitment with its owner and quoted line, decisions. | yes | yes |
-| `redact` | Black out SSNs, account numbers and other sensitive values in a PDF or image without reading the document. | yes | yes |
-| `remote-machine-protocol` | Use for driving agent CLIs on a second physical Windows machine over the tailnet: SSH, psmux session persistence, slot dispatch, and what an SSH. | yes | yes |
-| `replicate` | Replicate a reference artifact through an explicit feature-parity checklist and item-by-item verification. | yes | yes |
-| `review` | Route any review request to its single best owner; this skill chooses but never runs the review. | yes | yes |
-| `review-lenses` | Use when reviewing a repository or diff for observability, configuration, concurrency, or idempotency defects. | yes | yes |
-| `sage` | Distill recurring, cited lessons from a repository's review and verification artifacts into durable WISDOM. | yes | yes |
-| `sift` | Collect, categorize, and route a broad public research source set for human triage. | yes | yes |
-| `slides` | Use when building a deck, poster or flyer: routes to a PowerPoint-native or an HTML build once the governing design language is read. | yes | yes |
-| `solo-review` | Use when one primary perspective should review a focused codebase or CAD target, with an optional verified fix loop. | yes | yes |
-| `spar` | Use when a bounded target needs adversarial break-fix rounds with independent attack lenses and evidence gates. | yes | yes |
-| `spec` | Write SPEC.md with testable acceptance criteria. | yes | yes |
-| `stack` | Use when a new app needs its stack chosen, scaffolded, and given an architecture before any feature is written. | yes | yes |
-| `start-project` | Scaffold a new project against the harness, or wire an unscaffolded folder into it, with connectors declared and verified. | yes | yes |
-| `stingy` | Audit a Claude Code session transcript for token waste and return a ranked, evidence-backed report with the fix for each class. | yes | yes |
-| `swe` | Route software engineering through skill selection, development, debugging, dispatch, review, and delivery. | yes | yes |
-| `syschaos-handoff` | Use when handing this session's work to a new Claude session on the second machine that Douglas can pilot. | yes | yes |
-| `systematic-debugging` | Find root cause before proposing any fix for a bug or test failure. | yes | yes |
-| `tactician` | Assess a project’s verified loose ends, choose the next moves inside a settled shape, and drive them through delegated builders to a pull request. | yes | yes |
-| `task` | Use when a substantive mixed prompt contains questions, rulings, intent, and executable work that must all be accounted for. | yes | yes |
-| `tech-debt-audit` | Thorough, user-invoked tech debt and architecture audit of the current codebase. | yes | yes |
-| `test-driven-development` | Write a failing test before implementation code, and watch it fail, for any feature or bugfix. | yes | yes |
-| `todoist` | Read and manage Douglas's Todoist -- add, file, label, reschedule, complete, and review tasks -- through the Todoist v1 API. | yes | yes |
-| `trailblaze` | Author or revise evidence-backed reusable skill pathways; route one-off work and pathway execution to their existing owners. | yes | yes |
-| `trainer` | Mine a canonical skill's real usage history for evidence-backed improvement opportunities. | yes | yes |
-| `transcribe` | Use when transcribing user-authorized audio through an available trusted transcription process. | yes | yes |
-| `triage` | Deduplicate, invalidate, cluster, and recommend action for a whole open work set. | yes | yes |
-| `tune` | Calibrate active voice guides from supplied samples with measurement, reviewable changes, and backup-before-write. | yes | yes |
-| `ui-feature-ledger` | Protect approved interactive UI controls from unrequested removal across later edits. | yes | yes |
+| `lego` | Catalog reusable implementation patterns into a cited LEGO.md library; /lego. | yes | yes |
+| `librarian` | Maintain Obsidian vault: broken links, orphans, duplicates, stale indexes, tags. | yes | yes |
+| `longrun` | Arm, run, resume or stop an unattended multi-hour project run across usage limits. | yes | yes |
+| `loop-engineer` | Author, check, arm or debug a bounded loop contract: /loop, verifier, trigger, stop bound. | yes | yes |
+| `loop-protocol` | Author, arm, revise or debug a loop, watchdog, or scheduled recurring run. | yes | yes |
+| `make-api` | 'Build an API', 'expose X over HTTP', 'stand up a web service': REST, GraphQL, FastAPI, Hono, live-tested; '/make-api'. | yes | yes |
+| `make-mcp` | Alias: a way into connect's Build an MCP server section; build and verify an MCP server once existing servers are ruled out. | yes | yes |
+| `mission-control` | One-glance status of this machine and every project: attention, filed, health | yes | yes |
+| `modernize` | Check one codebase for adoptable harness or ecosystem changes. | yes | yes |
+| `multi-claude` | Several Claude accounts: profiles, sign-in, headless or resumed sessions, Remote Control, psmux, transcript search, school seat. | yes | yes |
+| `news-digest` | '/news-digest', 'build my news digest', 'refresh the news briefing'. | yes | yes |
+| `notes` | Terse, skimmable notes, student docs, or quick messages in Douglas's voice. | yes | yes |
+| `onboard` | Developer explainer (--dev) or in-app end-user help (--user) for a codebase. | yes | yes |
+| `operations` | Entry router for running the machine, the agent fleet and sessions: host faults, status, dispatch, usage, unattended runs, hand-offs; picks one skill. | yes | yes |
+| `operator` | Operator (was machine-ops): Windows host fault: slow, kernel token leak, app won't launch, broken PATH shim. | yes | yes |
+| `orchestrate` | Orchestrate (was orchestration-protocol): conductor lifecycle, delegation, verification, integration evidence. | yes | yes |
+| `package` | Make a repository portable and clean-clone-verified. | yes | yes |
+| `present` | Deck, slide, presentation, poster, flyer, .pptx rebuild: pick the route first. | yes | yes |
+| `probe` | Test-suite effectiveness: coverage gaps, properties, mutation testing. | yes | yes |
+| `prompt` | '/prompt', 'shape this prompt', 'turn this dump into a brief': raw prompt to cited brief. | yes | yes |
+| `queue` | File a defect or idea in a project's discovery queue. | yes | yes |
+| `read` | Read (was paper-read): close read of one document, a paper first: claims, evidence, page locators. | yes | yes |
+| `recon` | Map a field vs. | yes | yes |
+| `recording-ingest` | Voice memo, meeting recording or transcript to attributed tasks, decisions. | yes | yes |
+| `recount` | /recount, 'recap what you did', 'what can I do now': plain summary of what's done, what's possible, where to find it, and what you need to do. | yes | yes |
+| `redact` | '/redact', 'redact my W-2', 'black out the SSN', 'remove the account number before I send this': PDF or image. | yes | yes |
+| `reference-hunt` | 'Find references', 'what should this look like', 'make it look less generic': moodboard, art direction before design. | yes | yes |
+| `remote-machine-protocol` | Remote GPU box agent CLIs: SSH, psmux, slot dispatch, dropped sessions. | yes | yes |
+| `replicate` | 'Match this' reference: feature-parity checklist, then item-by-item verification. | yes | yes |
+| `research` | Entry router for research: web sources, comparisons, field maps, papers, sessions, incidents; picks one skill. | yes | yes |
+| `review-lenses` | Alias: a way into review's lens mode for obs/config, concurrency, race and idempotency defects. | yes | yes |
+| `sage` | Mine review, probe, spar, verification artifacts into cited lessons in WISDOM.md. | yes | yes |
+| `scheme` | \"Plan this\", \"give me the plan\", a prompt-skill brief to walk unattended, loose ends: chunks, waves, approval packet. | yes | yes |
+| `sift` | Sift a topic: gather, categorize, route many public sources for human triage. | yes | yes |
+| `spar` | Adversarial break-fix rounds against a working target with independent attack lenses. | yes | yes |
+| `spec` | Check SPEC.md and the requirements record against the code (check, default), or write testable requirements (write, on request): 'write the spec'. | yes | yes |
+| `stack` | 'What should I build this in', 'pick the stack', 'scaffold this', 'set up the project', 'where should this file go', /stack. | yes | yes |
+| `start` | Start (was start-project): begin a project, scaffold or wire a folder into the harness; preflight one. | yes | yes |
+| `stingy` | 'Where did the tokens go', 'audit this session', 'why was that session so expensive': rank a transcript's token waste with fixes. | yes | yes |
+| `strategy` | Unsure how to start: pick wayfinder, brainstorming, grill-me or spar for a big, vague, unvetted or working thing. | yes | yes |
+| `swe` | Route software work: build, change, debug, test, review, package, land. | yes | yes |
+| `syschaos-handoff` | Hand this session to syschaos (SYSTEMATICCHAOS); an alias into handoff case B. | yes | yes |
+| `systematic-debugging` | Find root cause before fixing any bug or test failure. | yes | yes |
+| `task` | '/task', '/task audit', 'break this prompt down', 'triage this', 'what did I ask for'. | yes | yes |
+| `team-board` | Team board: scan Drive, ingest, refresh, daily, digest, build, preview, deploy, sign-in, program.yaml, team work maps and repo facts. | yes | yes |
+| `tech-debt-audit` | Full-repo tech debt audit, architecture review, code quality assessment, codebase health check: TECH_DEBT_AUDIT.md. | yes | yes |
+| `test-driven-development` | Write a failing test first for any feature or bugfix. | yes | yes |
+| `todoist` | Todoist to-do list: 'add this to my list', 'what's on my plate', 'what's due'; add, label, reschedule, complete. | yes | yes |
+| `trainer` | Grade ONE named skill's usage history and recommend a change. | yes | yes |
+| `transcribe` | Transcribe one authorized audio file via a trusted transcription process. | yes | yes |
+| `triage` | Dedupe, cluster, recommend action across a whole open work set: lanes, intake, misfires. | yes | yes |
+| `tune` | Update the vault voice guide from writing samples, measured, with a backup first. | yes | yes |
+| `ui-feature-ledger` | Record UI controls in the spec's one requirements file and catch silent control removal across edits. | yes | yes |
 | `ultraskill` | Use when creating, editing, testing, installing, or retiring a skill across Claude, Codex, and Cursor. | yes | yes |
-| `usage-mode` | Show, set, clear, or list agent usage modes for sessions, projects, and the machine. | yes | yes |
-| `user` | Independently exercise a running product against its explicit claimed functionality. | yes | yes |
-| `vault-protocol` | The contract for every agent that reads, searches, writes, moves, links, or mirrors Douglas's Obsidian vault: placement, folder READMEs, authorship. | yes | yes |
-| `verification-before-completion` | Run and read verification output before claiming any work complete, fixed, passing, or ready to commit. | yes | yes |
-| `video-cut` | Cut video from transcript evidence, validate every seam, and retain a reversible cut plan. | yes | yes |
-| `voice` | Rewrite existing prose in Douglas’s voice while preserving its facts, specifics, and meaning. | yes | yes |
-| `wayfinder` | Plan work too big for one session as a map of decision tickets in a local markdown tracker, resolved one ticket at a time. | yes | yes |
-| `wispr` | Use when a Wispr Flow meeting transcript is needed, or a notes.wisprflow.ai link is shared, on the Windows host. | yes | yes |
-| `work-scope` | Use when Get-WorkResume.ps1 returns state, or structured guarded task state is being adopted. | yes | yes |
-| `worktree-protocol` | Use for stable checkouts, one root per repository, cross-agent isolation, cloud-synced-folder exclusions, and worktree cleanup. | yes | yes |
+| `usage-mode` | Show, set, clear, list usage modes, including temporary and Mission Control. | yes | yes |
+| `user` | Exercise a RUNNING product against its claimed functionality as an independent tester. | yes | yes |
+| `vault-mirror` | Run, check or fix the nightly Obsidian vault mirror sync on SYSTEMATICCHAOS (Metropolis, main) or the laptop SEEK_TO_SERVE (John 14:12, branch john... | yes | yes |
+| `vault-protocol` | Load before any Obsidian vault read, search, write, move, link, mirror. | yes | yes |
+| `verification-before-completion` | Verify before claiming work done, fixed, or passing. | yes | yes |
+| `video-cut` | Cut video: remove dead air or a passage, verify seams, keep a reversible plan. | yes | yes |
+| `viewer` | Test whether a rendered page, dashboard or chart is understood by a fresh viewer. | yes | yes |
+| `viz` | 'Visualize this', 'make a chart', 'diagram this', 'map this argument', 'show this mechanism', 'catch-up visual', '/viz', 'what views am I missing'. | yes | yes |
+| `wayfinder` | Map work too big for one session as decision tickets: 'chart a map for this', 'plan this large effort', /wayfinder. | yes | yes |
+| `wispr` | Wispr Flow meeting transcript or notes.wisprflow.ai link on the Windows host. | yes | yes |
+| `work-scope` | Get-WorkResume.ps1 state, or adopting structured guarded task state. | yes | yes |
+| `worktree-protocol` | Stable checkouts, one root per repo, agent isolation, worktree cleanup. | yes | yes |
 
 ## Claude commands
 

@@ -1,7 +1,7 @@
 {
   "name": "multi-google-mcp",
   "version": "1.0.0",
-  "description": "Local MCP server for connecting multiple Google accounts to Claude Code",
+  "description": "MCP server for multiple Google accounts: local stdio for Claude Code, or a remote OAuth-protected connector over Streamable HTTP",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -9,7 +9,13 @@
     "add-account": "tsx src/setup.ts --add-account",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test test/**/*.test.ts",
+    "start:http": "node dist/index.js --http",
+    "store:keygen": "tsx src/store-cli.ts keygen",
+    "store:migrate": "tsx src/store-cli.ts migrate",
+    "clients:list": "tsx src/store-cli.ts clients list",
+    "clients:approve": "tsx src/store-cli.ts clients approve",
+    "clients:revoke": "tsx src/store-cli.ts clients revoke"
   },
   "dependencies": {
     "@googleapis/calendar": "^16.0.0",
@@ -24,11 +30,14 @@
     "@googleapis/slides": "^10.0.0",
     "@googleapis/tasks": "^17.0.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.3",
     "google-auth-library": "^11.0.2",
     "open": "^10.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.15.3",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
