@@ -10,7 +10,7 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import { createMcpServer } from "../server.js";
 import { setConfigBackend } from "../config.js";
 import { EncryptedStore } from "./store.js";
-import { ConnectorOAuthProvider, escapeHtml, type GoogleIdentity } from "./provider.js";
+import { BINDING_COOKIE, ConnectorOAuthProvider, escapeHtml, type GoogleIdentity } from "./provider.js";
 
 /** The Google half of the sign-in: an auth URL and a code exchange that returns the verified email. */
 export interface GoogleSignIn {
@@ -18,12 +18,19 @@ export interface GoogleSignIn {
   exchange(opts: { code: string; codeVerifier: string; redirectUri: string }): Promise<GoogleIdentity>;
 }
 
-/** Real Google sign-in with the OAuth client already in the store: openid email scope, PKCE, verified ID token. */
-export function googleSignIn(store: EncryptedStore): GoogleSignIn {
+/**
+ * Real Google sign-in with the OAuth client already in the store: openid email scope, PKCE, and an ID token
+ * verified by google-auth-library (signature against Google's certs, aud = our client id, iss = Google, exp).
+ * `makeClient` exists for tests (stubbed token endpoint and certs).
+ */
+export function googleSignIn(
+  store: EncryptedStore,
+  makeClient: (clientId: string, clientSecret: string, redirectUri: string) => OAuth2Client = (id, secret, uri) => new OAuth2Client(id, secret, uri)
+): GoogleSignIn {
   const client = (redirectUri: string) => {
     const g = store.data.google;
     if (!g.clientId || !g.clientSecret) throw new Error("Google OAuth client missing from the store. Run: npm run store:migrate");
-    return new OAuth2Client(g.clientId, g.clientSecret, redirectUri);
+    return makeClient(g.clientId, g.clientSecret, redirectUri);
   };
   return {
     authUrl: ({ state, codeChallenge, redirectUri }) =>
@@ -43,6 +50,21 @@ export function googleSignIn(store: EncryptedStore): GoogleSignIn {
       return { email: String(p?.email ?? ""), emailVerified: p?.email_verified === true };
     },
   };
+}
+
+/** One cookie value from a Cookie header, or undefined. Pure. */
+export function readCookie(header: string | undefined, name: string): string | undefined {
+  for (const part of (header ?? "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) {
+      try {
+        return decodeURIComponent(part.slice(i + 1).trim());
+      } catch {
+        return undefined;
+      }
+    }
+  }
+  return undefined;
 }
 
 export interface AuditEntry {
@@ -89,7 +111,9 @@ export function createConnectorApp(opts: ConnectorAppOptions) {
   const provider = new ConnectorOAuthProvider({ store, resourceUrl, allowedEmails: opts.allowedEmails, now: opts.now });
   const app = express();
   app.disable("x-powered-by");
-  // Behind Tailscale Funnel the peer is loopback; trust only it for X-Forwarded-For (rate-limit keys).
+  // Tailscale serve/Funnel proxies from loopback and *sets* X-Forwarded-For to the public client IP
+  // (tailscale ipn/ipnlocal/serve.go addProxyForwardedHeaders). Trusting only loopback makes req.ip, which
+  // every rate limiter here keys on, that client IP; a non-loopback peer's X-Forwarded-For is ignored.
   app.set("trust proxy", "loopback");
 
   app.use(
@@ -111,18 +135,30 @@ export function createConnectorApp(opts: ConnectorAppOptions) {
 
   const googleLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false });
 
-  app.get("/oauth/google/start", googleLimiter, (req: Request, res: Response) => {
-    const id = String(req.query.request ?? "");
+  const expired = (res: Response) => void res.status(400).type("text/plain").send("This sign-in request expired. Start again from Claude.");
+  const unbound = (res: Response) =>
+    void res.status(400).type("text/plain").send("This sign-in was not started in this browser. Start again from Claude.");
+  const cookieOf = (req: Request) => readCookie(req.headers.cookie, BINDING_COOKIE);
+
+  // Consent is a POST from the consent page; SameSite=Lax keeps the binding cookie off cross-site POSTs.
+  app.post("/oauth/google/start", googleLimiter, express.urlencoded({ extended: false, limit: "4kb" }), (req: Request, res: Response) => {
+    const id = String(req.body?.request ?? "");
     const p = provider.peekPending(id);
-    if (!p) return void res.status(400).type("text/plain").send("This sign-in request expired. Start again from Claude.");
+    if (!p) return expired(res);
+    if (!provider.bindingMatches(p, cookieOf(req))) return unbound(res);
     const challenge = crypto.createHash("sha256").update(p.googleVerifier).digest("base64url");
-    res.redirect(302, google.authUrl({ state: id, codeChallenge: challenge, redirectUri: googleCallback }));
+    res.redirect(303, google.authUrl({ state: id, codeChallenge: challenge, redirectUri: googleCallback }));
   });
+  app.all("/oauth/google/start", (_req, res) => void res.status(405).set("Allow", "POST").type("text/plain").send("Use the consent page."));
 
   app.get("/oauth/google/callback", googleLimiter, async (req: Request, res: Response) => {
     const id = String(req.query.state ?? "");
+    const peeked = provider.peekPending(id);
+    if (!peeked) return expired(res);
+    if (!provider.bindingMatches(peeked, cookieOf(req))) return unbound(res);
     const p = provider.takePending(id);
-    if (!p) return void res.status(400).type("text/plain").send("This sign-in request expired. Start again from Claude.");
+    if (!p) return expired(res);
+    res.clearCookie(BINDING_COOKIE, { path: "/" });
     const back = (params: Record<string, string>) => {
       const u = new URL(p.redirectUri);
       for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);

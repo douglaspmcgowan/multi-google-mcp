@@ -7,9 +7,9 @@
  */
 export const LOCAL_PATH_ARGS = ["destination_path", "source_path", "file_path", "dest_dir", "attachment_paths"] as const;
 
+/** Absent means exactly undefined, null, "" or []; anything else (whitespace included) is refused. */
 function present(v: unknown): boolean {
-  if (v === undefined || v === null) return false;
-  if (typeof v === "string") return v.trim().length > 0;
+  if (v === undefined || v === null || v === "") return false;
   if (Array.isArray(v)) return v.length > 0;
   return true;
 }

@@ -5,20 +5,24 @@
 .DESCRIPTION
   1. Checks node, npm, tailscale, and that MULTI_GOOGLE_STORE_KEY exists in the User environment (by name only; the value is never read).
   2. npm ci + npm run build.
-  3. Sets User env PUBLIC_BASE_URL to this node's Tailscale Funnel URL and PORT.
+  3. Sets User env MULTI_GOOGLE_PUBLIC_BASE_URL (this node's Funnel URL) and MULTI_GOOGLE_PORT. No generic variable
+     (PORT, PUBLIC_BASE_URL) is written: other dev servers read those, and one landing on the Funnel port would be served
+     publicly without auth. Removes PORT / PUBLIC_BASE_URL User values that the previous installer version wrote
+     (only when they still hold the values it wrote: PORT=8787, PUBLIC_BASE_URL=this node's Funnel URL).
   4. Registers Scheduled Task "multi-google-connector": at the current user's logon, interactive token (no stored password),
-     restart every minute on failure, no time limit. Starts it.
-  5. tailscale funnel --bg --https=443 http://127.0.0.1:<Port>
-  6. Prints the connector URL to paste into claude.ai Settings > Connectors.
+     restart every minute on failure, no time limit. Starts it. Start-Connector.ps1 turns the Funnel mount on only once
+     node listens, and off whenever node exits.
+  5. Prints the connector URL to paste into claude.ai Settings > Connectors.
   No password, autologon or stored credential is used or written.
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
   [string]$RepoPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-  [int]$Port = 8787,
+  [int]$Port = 47887,
   [string]$TaskName = 'multi-google-connector'
 )
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'FunnelMount.psm1') -Force
 
 foreach ($cmd in 'node', 'npm', 'tailscale') {
   if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "$cmd is not on PATH." }
@@ -36,6 +40,12 @@ $dnsName = ([string]$status.Self.DNSName).TrimEnd('.')
 if (-not $dnsName) { throw 'Could not read this node''s Tailscale DNS name (is Tailscale logged in?).' }
 $publicBaseUrl = "https://$dnsName"
 
+$rootProxy = Get-FunnelRootProxy
+$legacyTarget = 'http://127.0.0.1:8787'
+if ($rootProxy -and $rootProxy.TrimEnd('/') -notin @("http://127.0.0.1:$Port", $legacyTarget)) {
+  throw "https:443 / already serves $rootProxy; not replacing it."
+}
+
 if ($PSCmdlet.ShouldProcess($RepoPath, 'npm ci; npm run build')) {
   Push-Location -LiteralPath $RepoPath
   try {
@@ -46,9 +56,27 @@ if ($PSCmdlet.ShouldProcess($RepoPath, 'npm ci; npm run build')) {
   } finally { Pop-Location }
 }
 
-if ($PSCmdlet.ShouldProcess('User environment', "Set PUBLIC_BASE_URL=$publicBaseUrl, PORT=$Port")) {
-  [Environment]::SetEnvironmentVariable('PUBLIC_BASE_URL', $publicBaseUrl, 'User')
-  [Environment]::SetEnvironmentVariable('PORT', [string]$Port, 'User')
+if ($PSCmdlet.ShouldProcess('User environment', "Set MULTI_GOOGLE_PUBLIC_BASE_URL=$publicBaseUrl, MULTI_GOOGLE_PORT=$Port")) {
+  [Environment]::SetEnvironmentVariable('MULTI_GOOGLE_PUBLIC_BASE_URL', $publicBaseUrl, 'User')
+  [Environment]::SetEnvironmentVariable('MULTI_GOOGLE_PORT', [string]$Port, 'User')
+}
+
+# Previous version wrote generic PORT / PUBLIC_BASE_URL. Remove them only if they still hold its values.
+$legacy = @{ PORT = '8787'; PUBLIC_BASE_URL = $publicBaseUrl }
+foreach ($name in $legacy.Keys) {
+  $value = [Environment]::GetEnvironmentVariable($name, 'User')
+  if ($null -ne $value -and $value -eq $legacy[$name]) {
+    if ($PSCmdlet.ShouldProcess("User environment $name", 'Remove value written by the previous installer')) {
+      [Environment]::SetEnvironmentVariable($name, $null, 'User')
+    }
+  } elseif ($null -ne $value) {
+    Write-Warning "User env $name is set to a value this installer did not write; left unchanged. The connector ignores it."
+  }
+}
+
+# Previous version published 127.0.0.1:8787; drop that mount (the start wrapper publishes the new port).
+if ($rootProxy -and $rootProxy.TrimEnd('/') -eq $legacyTarget) {
+  if ($PSCmdlet.ShouldProcess('https:443 /', "Remove legacy funnel mount $legacyTarget")) { [void](Disable-ConnectorFunnel 8787) }
 }
 
 $pwsh = (Get-Command pwsh).Source
@@ -63,12 +91,8 @@ if ($PSCmdlet.ShouldProcess($TaskName, 'Register Scheduled Task (at logon, resta
     -MultipleInstances IgnoreNew
   Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+  # The task inherits the User environment written above.
   Start-ScheduledTask -TaskName $TaskName
-}
-
-if ($PSCmdlet.ShouldProcess("https://$dnsName", "tailscale funnel --bg --https=443 http://127.0.0.1:$Port")) {
-  tailscale funnel --bg --https=443 "http://127.0.0.1:$Port"
-  if ($LASTEXITCODE -ne 0) { throw 'tailscale funnel failed. Enable Funnel for this node in the Tailscale admin console (deploy/README.md step 1).' }
 }
 
 Write-Host ''
@@ -76,3 +100,4 @@ Write-Host "Connector URL (claude.ai > Settings > Connectors > Add custom connec
 Write-Host "  $publicBaseUrl/mcp"
 Write-Host "Google OAuth redirect URI to add in Google Cloud console:"
 Write-Host "  $publicBaseUrl/oauth/google/callback"
+Write-Host "After adding the connector, approve it on this host (deploy/README.md step 7)."

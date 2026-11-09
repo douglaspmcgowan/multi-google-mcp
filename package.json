@@ -12,7 +12,10 @@
     "test": "tsx --test test/**/*.test.ts",
     "start:http": "node dist/index.js --http",
     "store:keygen": "tsx src/store-cli.ts keygen",
-    "store:migrate": "tsx src/store-cli.ts migrate"
+    "store:migrate": "tsx src/store-cli.ts migrate",
+    "clients:list": "tsx src/store-cli.ts clients list",
+    "clients:approve": "tsx src/store-cli.ts clients approve",
+    "clients:revoke": "tsx src/store-cli.ts clients revoke"
   },
   "dependencies": {
     "@googleapis/calendar": "^16.0.0",

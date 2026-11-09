@@ -13,14 +13,19 @@ import {
   InvalidGrantError,
   InvalidTargetError,
   InvalidTokenError,
+  ServerError,
 } from "@modelcontextprotocol/sdk/server/auth/errors.js";
-import { EncryptedStore, sha256, type TokenRecord } from "./store.js";
+import { EncryptedStore, sha256, type StoreState, type StoredClient, type TokenRecord } from "./store.js";
 
 export const ACCESS_TTL_MS = 60 * 60 * 1000; // 1 h
 export const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 d
 export const CODE_TTL_MS = 5 * 60 * 1000;
 export const PENDING_TTL_MS = 10 * 60 * 1000;
 export const MAX_CLIENTS = 200;
+/** An unapproved registration is dropped after this long. */
+export const PENDING_CLIENT_TTL_MS = 24 * 60 * 60 * 1000;
+/** Largest accepted client metadata document (JSON bytes). */
+export const MAX_CLIENT_METADATA_BYTES = 4096;
 
 /** Hosted Claude callbacks; loopback (any port) is allowed separately for Claude Code and tests. */
 export const ALLOWED_REDIRECTS = ["https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback"];
@@ -62,7 +67,42 @@ export interface PendingAuthorization {
   scopes: string[];
   resource?: string;
   googleVerifier: string;
+  /** sha256 of the browser-binding cookie set at /authorize; the start and callback steps require it. */
+  bindingHash: string;
   expiresAt: number;
+}
+
+/** Name of the HttpOnly cookie that binds a sign-in to the browser that started it. */
+export const BINDING_COOKIE = "mg_auth";
+
+/** True when the client has live (unexpired) access or refresh tokens. Pure. */
+export function clientHasLiveTokens(s: StoreState, clientId: string, now: number): boolean {
+  return [s.accessTokens, s.refreshTokens].some((bag) => Object.values(bag).some((t) => t.clientId === clientId && t.expiresAt > now));
+}
+
+/** Drops pending (unapproved) clients older than PENDING_CLIENT_TTL_MS. */
+export function expirePendingClients(s: StoreState, now: number): void {
+  for (const [id, c] of Object.entries(s.clients)) {
+    if (!c.approved_at && (c.client_id_issued_at ?? 0) * 1000 + PENDING_CLIENT_TTL_MS <= now) delete s.clients[id];
+  }
+}
+
+/** Marks a client approved. Returns false when it does not exist. */
+export function approveClient(s: StoreState, clientId: string, now: number): boolean {
+  const c = s.clients[clientId];
+  if (!c) return false;
+  c.approved_at = c.approved_at ?? Math.floor(now / 1000);
+  return true;
+}
+
+/** Removes a client and every code and token issued to it. Returns false when it did not exist. */
+export function revokeClient(s: StoreState, clientId: string): boolean {
+  const existed = clientId in s.clients;
+  delete s.clients[clientId];
+  for (const bag of [s.codes, s.accessTokens, s.refreshTokens] as Array<Record<string, { clientId: string }>>) {
+    for (const [k, v] of Object.entries(bag)) if (v.clientId === clientId) delete bag[k];
+  }
+  return existed;
 }
 
 export interface ProviderOptions {
@@ -96,16 +136,19 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
             "redirect_uris must be https://claude.ai/api/mcp/auth_callback, https://claude.com/api/mcp/auth_callback, or an http loopback (localhost / 127.0.0.1) URI"
           );
         }
+        if (Buffer.byteLength(JSON.stringify(full), "utf8") > MAX_CLIENT_METADATA_BYTES) {
+          throw new InvalidClientMetadataError(`client metadata exceeds ${MAX_CLIENT_METADATA_BYTES} bytes`);
+        }
         const id = full.client_id ?? crypto.randomUUID();
-        const record = { ...full, client_id: id, client_id_issued_at: full.client_id_issued_at ?? Math.floor(now() / 1000) };
+        const record: StoredClient = { ...(full as StoredClient), client_id: id, client_id_issued_at: full.client_id_issued_at ?? Math.floor(now() / 1000) };
+        delete record.approved_at; // only the host CLI approves
         store.update((s) => {
-          const ids = Object.keys(s.clients);
-          if (ids.length >= MAX_CLIENTS) {
-            // Evict the oldest registration; DCR clients re-register on a fresh connection.
-            ids.sort((a, b) => (s.clients[a].client_id_issued_at ?? 0) - (s.clients[b].client_id_issued_at ?? 0));
-            delete s.clients[ids[0]];
+          expirePendingClients(s, now());
+          // Never evict: an approved client or one with live tokens is Douglas's connection.
+          if (Object.keys(s.clients).length >= MAX_CLIENTS) {
+            throw new ServerError("Client registration is full; remove clients on the host with npm run clients:revoke");
           }
-          s.clients[id] = record as never;
+          s.clients[id] = record;
         });
         return record;
       },
@@ -125,11 +168,17 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     return this.opts.allowedEmails.has(email.trim().toLowerCase());
   }
 
-  /** Records the request and shows a consent page naming the client and its redirect host. */
+  /**
+   * Pending client: a page saying it awaits approval on the host. Approved client: records the request,
+   * sets the browser-binding cookie, and shows a consent page naming the client and its redirect host.
+   */
   async authorize(client: OAuthClientInformationFull, params: AuthorizationParams, res: Response): Promise<void> {
     const resource = this.checkResource(params.resource);
+    const stored = this.opts.store.data.clients[client.client_id];
+    if (!stored?.approved_at) return void this.pendingClientPage(stored ?? (client as StoredClient), res);
     this.sweepPending();
     const id = rand();
+    const binding = rand();
     this.pending.set(id, {
       clientId: client.client_id,
       clientName: typeof client.client_name === "string" ? client.client_name : undefined,
@@ -139,15 +188,20 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
       scopes: params.scopes ?? [],
       resource,
       googleVerifier: crypto.randomBytes(48).toString("base64url"),
+      bindingHash: sha256(binding),
       expiresAt: this.now() + PENDING_TTL_MS,
     });
     const host = new URL(params.redirectUri).host;
     const name = escapeHtml(typeof client.client_name === "string" ? client.client_name : "An MCP client");
-    res
-      .status(200)
-      .set("Content-Type", "text/html; charset=utf-8")
-      .set("X-Frame-Options", "DENY")
-      .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+    res.cookie(BINDING_COOKIE, binding, {
+      httpOnly: true,
+      secure: this.opts.resourceUrl.protocol === "https:",
+      sameSite: "lax",
+      path: "/",
+      maxAge: PENDING_TTL_MS,
+    });
+    page(res, 200)
+      .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'")
       .send(
         `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
           `<title>Connect multi-google</title></head><body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem">` +
@@ -156,8 +210,32 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
           (host.startsWith("localhost") || host.startsWith("127.0.0.1")
             ? `<p><strong>Warning:</strong> this is a local address. Continue only if you started this sign-in yourself.</p>`
             : "") +
-          `<p><a href="/oauth/google/start?request=${encodeURIComponent(id)}">Sign in with Google</a></p></body></html>`
+          `<form method="post" action="/oauth/google/start"><input type="hidden" name="request" value="${escapeHtml(id)}">` +
+          `<button type="submit">Sign in with Google</button></form></body></html>`
       );
+  }
+
+  private pendingClientPage(client: StoredClient, res: Response): void {
+    const issued = client.client_id_issued_at ? new Date(client.client_id_issued_at * 1000).toISOString() : "unknown";
+    const name = escapeHtml(typeof client.client_name === "string" ? client.client_name : "An MCP client");
+    const id = escapeHtml(client.client_id);
+    page(res, 403).send(
+      `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+        `<title>Awaiting approval</title></head><body style="font-family:system-ui;max-width:36rem;margin:4rem auto;padding:0 1rem">` +
+        `<h1>Awaiting approval on the host</h1><p><strong>${name}</strong> registered with this connector but is not approved yet.</p>` +
+        `<p>Client id: <code>${id}</code><br>Registered: <code>${escapeHtml(issued)}</code></p>` +
+        `<p>If you just added this connector yourself, approve it on the host, then connect again:</p>` +
+        `<pre>npm run clients:approve -- ${id}</pre>` +
+        `<p>If you did not, ignore this page; the registration expires in 24 hours.</p></body></html>`
+    );
+  }
+
+  /** True when the request's binding cookie matches the pending request. */
+  bindingMatches(p: PendingAuthorization, cookieValue: string | undefined): boolean {
+    if (!cookieValue) return false;
+    const a = Buffer.from(sha256(cookieValue), "hex");
+    const b = Buffer.from(p.bindingHash, "hex");
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
 
   takePending(id: string): PendingAuthorization | undefined {
@@ -182,7 +260,7 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
   issueCode(p: PendingAuthorization, email: string): string {
     const code = rand();
     this.opts.store.update((s) => {
-      this.opts.store.purge(this.now());
+      this.opts.store.purge(this.now(), s);
       s.codes[sha256(code)] = {
         clientId: p.clientId,
         redirectUri: p.redirectUri,
@@ -216,6 +294,7 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     resource?: URL
   ): Promise<OAuthTokens> {
     const rec = this.codeRecord(client, code);
+    if (!this.opts.store.data.clients[client.client_id]?.approved_at) throw new InvalidGrantError("Client is not approved");
     // Single use: consumed before any further check can fail.
     this.opts.store.update((s) => delete s.codes[sha256(code)]);
     if (redirectUri !== undefined && redirectUri !== rec.redirectUri) throw new InvalidGrantError("redirect_uri mismatch");
@@ -230,7 +309,7 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     const now = this.now();
     const base: Omit<TokenRecord, "expiresAt"> = { clientId, email, scopes, resource, family };
     this.opts.store.update((s) => {
-      this.opts.store.purge(now);
+      this.opts.store.purge(now, s);
       s.accessTokens[sha256(access)] = { ...base, expiresAt: now + ACCESS_TTL_MS };
       s.refreshTokens[sha256(refresh)] = { ...base, expiresAt: now + REFRESH_TTL_MS };
     });
@@ -288,6 +367,7 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     if (rec.expiresAt <= this.now()) throw new InvalidTokenError("Token has expired");
     if (rec.resource && rec.resource !== this.opts.resourceUrl.href) throw new InvalidTokenError("Token not issued for this server");
     if (!this.isEmailAllowed(rec.email)) throw new InvalidTokenError("Account no longer allowed");
+    if (!this.opts.store.data.clients[rec.clientId]?.approved_at) throw new InvalidTokenError("Client is no longer approved");
     return {
       token,
       clientId: rec.clientId,
@@ -298,14 +378,21 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
   }
 
   async revokeToken(client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest): Promise<void> {
+    // Revoking either token of a grant ends the whole grant (RFC 7009 2.1: SHOULD for refresh tokens).
     const h = sha256(request.token);
-    this.opts.store.update((s) => {
-      for (const bag of [s.accessTokens, s.refreshTokens]) {
-        const rec = bag[h];
-        if (rec && rec.clientId === client.client_id) delete bag[h];
-      }
-    });
+    const s = this.opts.store.data;
+    const rec = s.accessTokens[h] ?? s.refreshTokens[h];
+    if (rec && rec.clientId === client.client_id) this.revokeFamily(rec.family);
   }
+}
+
+function page(res: Response, status: number): Response {
+  return res
+    .status(status)
+    .set("Content-Type", "text/html; charset=utf-8")
+    .set("Cache-Control", "no-store")
+    .set("X-Frame-Options", "DENY")
+    .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
 }
 
 export function escapeHtml(s: string): string {

@@ -3,12 +3,50 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { getConfigPath } from "./config.js";
 import { EncryptedStore, DEFAULT_STORE_FILE, STORE_KEY_ENV } from "./http/store.js";
+import { approveClient, clientHasLiveTokens, expirePendingClients, revokeClient } from "./http/provider.js";
 
 /**
  * npm run store:keygen  -- new key into the Windows User environment (never printed).
  * npm run store:migrate -- copy the Google client and tokens from config.json into the encrypted store.
- * Neither command prints a key, a token or a secret.
+ * npm run clients:list | clients:approve -- <client_id> | clients:revoke -- <client_id>
+ *   -- manage connector clients (DCR registrations). Safe while the server runs: every write is a locked
+ *      read-modify-write of the store.
+ * No command prints a key, a token or a secret.
  */
+
+/** One line per registered client: id, status, name, registration time, live-token flag. Never a secret. */
+export function listClients(store: EncryptedStore, now: number = Date.now()): string[] {
+  return store.update((s) => {
+    expirePendingClients(s, now);
+    return Object.values(s.clients)
+      .sort((a, b) => (a.client_id_issued_at ?? 0) - (b.client_id_issued_at ?? 0))
+      .map((c) => {
+        const when = (t?: number) => (t ? new Date(t * 1000).toISOString() : "?");
+        const status = c.approved_at ? `approved ${when(c.approved_at)}` : "PENDING";
+        const name = typeof c.client_name === "string" ? JSON.stringify(c.client_name.slice(0, 60)) : "(no name)";
+        const redirect = (c.redirect_uris ?? []).map((u) => { try { return new URL(String(u)).host; } catch { return "?"; } }).join(",");
+        return `${c.client_id}  ${status}  registered ${when(c.client_id_issued_at)}  ${name}  -> ${redirect}${clientHasLiveTokens(s, c.client_id, now) ? "  [live tokens]" : ""}`;
+      });
+  });
+}
+
+/** Runs one clients subcommand against the store. Returns the message to print; throws on a bad id. */
+export function clientsCommand(store: EncryptedStore, sub: string, id: string | undefined, now: number = Date.now()): string {
+  if (sub === "list") {
+    const lines = listClients(store, now);
+    return lines.length ? lines.join("\n") : "No registered clients.";
+  }
+  if (!id) throw new Error(`Usage: npm run clients:${sub} -- <client_id>`);
+  if (sub === "approve") {
+    if (!store.update((s) => approveClient(s, id, now))) throw new Error(`No client ${id}. List them with: npm run clients:list`);
+    return `Approved ${id}. Connect again from Claude.`;
+  }
+  if (sub === "revoke") {
+    if (!store.update((s) => revokeClient(s, id))) throw new Error(`No client ${id}.`);
+    return `Revoked ${id} and every code and token issued to it.`;
+  }
+  throw new Error("Usage: store-cli clients list | approve <client_id> | revoke <client_id>");
+}
 
 /** Copies client id/secret and accounts from a plaintext config into the store. Returns the account names. */
 export function migrateConfig(configFile: string, store: EncryptedStore): string[] {
@@ -60,7 +98,12 @@ function main(): void {
     console.log(`Migrated ${names.length} account(s) (${names.join(", ")}) and the OAuth client into ${file}. config.json is unchanged; the stdio server keeps using it.`);
     return;
   }
-  console.log("Usage: store-cli keygen [--force] | migrate");
+  if (cmd === "clients") {
+    const file = process.env.MULTI_GOOGLE_STORE || DEFAULT_STORE_FILE;
+    console.log(clientsCommand(EncryptedStore.open(file), rest[0] ?? "", rest[1]));
+    return;
+  }
+  console.log("Usage: store-cli keygen [--force] | migrate | clients list|approve|revoke [client_id]");
   process.exitCode = 2;
 }
 

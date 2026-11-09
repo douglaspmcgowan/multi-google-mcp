@@ -20,6 +20,8 @@ export interface StoredClient {
   client_secret?: string;
   client_secret_expires_at?: number;
   redirect_uris: string[];
+  /** Set by `npm run clients:approve`; a client without it is pending and gets no code. */
+  approved_at?: number;
   [k: string]: unknown;
 }
 
@@ -101,30 +103,104 @@ export function decrypt(key: Buffer, envelope: string): string {
   }
 }
 
+/** Lock file held across read-modify-write so a CLI and the running server never lose each other's writes. */
+export const LOCK_STALE_MS = 10_000;
+const LOCK_WAIT_MS = 5_000;
+const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+function acquireLock(lock: string): number {
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      const fd = fs.openSync(lock, "wx", 0o600);
+      fs.writeSync(fd, String(process.pid));
+      return fd;
+    } catch (e: any) {
+      if (e?.code !== "EEXIST") throw e;
+      try {
+        if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS) {
+          fs.rmSync(lock, { force: true });
+          continue;
+        }
+      } catch {
+        continue; // vanished between open and stat
+      }
+      if (Date.now() > deadline) throw new Error(`Store is locked (${lock}); retry, or delete the lock file if no multi-google process is running.`);
+      sleepSync(20);
+    }
+  }
+}
+
+function releaseLock(lock: string, fd: number): void {
+  fs.closeSync(fd);
+  fs.rmSync(lock, { force: true });
+}
+
 export class EncryptedStore {
   private state: StoreState;
+  /** Identity of the file version `state` was read from; a change on disk triggers a re-read. */
+  private stamp = "";
 
   constructor(readonly file: string, private readonly key: Buffer) {
-    this.state = fs.existsSync(file) ? { ...emptyState(), ...JSON.parse(decrypt(key, fs.readFileSync(file, "utf8"))) } : emptyState();
+    this.state = emptyState();
+    this.reload();
   }
 
   static open(file: string = DEFAULT_STORE_FILE, env: Record<string, string | undefined> = process.env): EncryptedStore {
     return new EncryptedStore(file, parseStoreKey(env[STORE_KEY_ENV]));
   }
 
+  private get lockFile(): string {
+    return `${this.file}.lock`;
+  }
+
+  private fileStamp(): string {
+    try {
+      const st = fs.statSync(this.file);
+      return `${st.ino}:${st.size}:${st.mtimeMs}`;
+    } catch {
+      return "";
+    }
+  }
+
+  /** Re-reads the file when another process (a CLI, another server) changed it. */
+  private reload(): void {
+    const stamp = this.fileStamp();
+    if (stamp === this.stamp) return;
+    this.state = stamp ? { ...emptyState(), ...JSON.parse(decrypt(this.key, fs.readFileSync(this.file, "utf8"))) } : emptyState();
+    this.stamp = stamp;
+  }
+
+  /** Current state, re-read from disk when the file changed since the last read. */
   get data(): StoreState {
+    this.reload();
     return this.state;
   }
 
-  /** Applies a change and persists atomically (temp file + rename, mode 0600). */
+  /**
+   * Applies a change under the file lock: re-read the latest file, apply `fn`,
+   * persist atomically (temp file + rename, mode 0600). Concurrent writers
+   * (the server and a CLI) therefore merge instead of overwriting each other.
+   */
   update<T>(fn: (s: StoreState) => T): T {
-    const result = fn(this.state);
-    this.save();
-    return result;
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    const fd = acquireLock(this.lockFile);
+    try {
+      this.reload();
+      const result = fn(this.state);
+      this.write();
+      return result;
+    } finally {
+      releaseLock(this.lockFile, fd);
+    }
   }
 
+  /** Persists the current state under the lock. */
   save(): void {
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    this.update(() => undefined);
+  }
+
+  private write(): void {
     const tmp = `${this.file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
     fs.writeFileSync(tmp, encrypt(this.key, JSON.stringify(this.state)), { mode: 0o600 });
     fs.renameSync(tmp, this.file);
@@ -133,11 +209,11 @@ export class EncryptedStore {
     } catch {
       /* Windows: ACLs, not modes */
     }
+    this.stamp = this.fileStamp();
   }
 
-  /** Drops expired codes and tokens. */
-  purge(now: number): void {
-    const s = this.state;
+  /** Drops expired codes and tokens from `s` (default: the current state). */
+  purge(now: number, s: StoreState = this.state): void {
     for (const bag of [s.codes, s.accessTokens, s.refreshTokens, s.usedRefreshTokens] as Array<Record<string, { expiresAt: number }>>) {
       for (const [k, v] of Object.entries(bag)) if (v.expiresAt <= now) delete bag[k];
     }

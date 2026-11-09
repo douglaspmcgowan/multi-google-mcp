@@ -10,7 +10,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { EncryptedStore } from "../src/http/store.js";
 import { createConnectorApp, fileAuditor, type GoogleSignIn } from "../src/http/app.js";
-import { isAllowedRedirect } from "../src/http/provider.js";
+import { approveClient, isAllowedRedirect, MAX_CLIENTS, PENDING_CLIENT_TTL_MS } from "../src/http/provider.js";
 import { setConfigBackend } from "../src/config.js";
 
 const CLAUDE_CB = "https://claude.ai/api/mcp/auth_callback";
@@ -19,17 +19,19 @@ const auditFile = path.join(dir, "audit.log");
 let clock = Date.now();
 let googleEmail = "allowed@example.com";
 const googleCalls: string[] = [];
+let googleVerified = true;
 const fakeGoogle: GoogleSignIn = {
   authUrl: ({ state }) => `https://accounts.google.com/o/oauth2/v2/auth?state=${encodeURIComponent(state)}`,
   exchange: async ({ code }) => {
     googleCalls.push(code);
-    return { email: googleEmail, emailVerified: true };
+    return { email: googleEmail, emailVerified: googleVerified };
   },
 };
 
 let base = "";
 let server: http.Server;
 let store: EncryptedStore;
+const allowed = new Set(["allowed@example.com"]);
 
 test.before(async () => {
   server = http.createServer();
@@ -46,7 +48,7 @@ test.before(async () => {
   const { app } = createConnectorApp({
     store,
     publicBaseUrl: base,
-    allowedEmails: new Set(["allowed@example.com"]),
+    allowedEmails: allowed,
     google: fakeGoogle,
     audit: fileAuditor(auditFile),
     now: () => clock,
@@ -64,26 +66,61 @@ const pkce = () => {
   return { verifier, challenge: crypto.createHash("sha256").update(verifier).digest("base64url") };
 };
 
-async function register(redirect = CLAUDE_CB) {
+// Each registration comes from its own forwarded client IP (as Tailscale Funnel sets it), so the SDK's
+// per-IP DCR limit (20/h) does not trip across tests; the limiter test below pins one IP on purpose.
+let ipCounter = 0;
+const nextIp = () => `203.0.113.${(ipCounter++ % 250) + 1}`;
+
+async function register(redirect = CLAUDE_CB, ip = nextIp()) {
   return fetch(`${base}/register`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", "x-forwarded-for": ip },
     body: JSON.stringify({ redirect_uris: [redirect], token_endpoint_auth_method: "none", client_name: "Claude", grant_types: ["authorization_code", "refresh_token"], response_types: ["code"] }),
   });
 }
 
-/** Runs /authorize -> consent -> Google start -> Google callback. Returns the final redirect. */
-async function signIn(clientId: string, challenge: string, redirect = CLAUDE_CB): Promise<URL> {
-  const q = new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirect, code_challenge: challenge, code_challenge_method: "S256", state: "st-1", resource: `${base}/mcp` });
-  const consent = await fetch(`${base}/authorize?${q}`, { redirect: "manual" });
-  assert.equal(consent.status, 200);
-  const html = await consent.text();
+/** Registers and approves on the host, like Douglas running npm run clients:approve. */
+async function approvedClient(redirect = CLAUDE_CB) {
+  const client = await (await register(redirect)).json();
+  store.update((s) => approveClient(s, client.client_id, clock));
+  return client;
+}
+
+const authorizeQuery = (clientId: string, challenge: string, redirect = CLAUDE_CB) =>
+  new URLSearchParams({ response_type: "code", client_id: clientId, redirect_uri: redirect, code_challenge: challenge, code_challenge_method: "S256", state: "st-1", resource: `${base}/mcp` });
+
+/** /authorize -> consent page. Returns the request id and the binding cookie (name=value). */
+async function consent(clientId: string, challenge: string, redirect = CLAUDE_CB) {
+  const res = await fetch(`${base}/authorize?${authorizeQuery(clientId, challenge, redirect)}`, { redirect: "manual" });
+  assert.equal(res.status, 200);
+  const html = await res.text();
   assert.ok(html.includes(new URL(redirect).host), "consent page names redirect host");
-  const startPath = html.match(/href="(\/oauth\/google\/start\?request=[^"]+)"/)![1];
-  const start = await fetch(base + startPath, { redirect: "manual" });
-  assert.equal(start.status, 302);
+  const setCookie = res.headers.get("set-cookie")!;
+  assert.match(setCookie, /mg_auth=/);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Lax/i);
+  const request = html.match(/name="request" value="([^"]+)"/)![1];
+  return { request, cookie: setCookie.split(";")[0] };
+}
+
+const startPost = (request: string, cookie?: string) =>
+  fetch(`${base}/oauth/google/start`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...(cookie ? { cookie } : {}) },
+    body: new URLSearchParams({ request }),
+  });
+
+const callback = (state: string, cookie?: string) =>
+  fetch(`${base}/oauth/google/callback?code=google-code&state=${encodeURIComponent(state)}`, { redirect: "manual", headers: cookie ? { cookie } : {} });
+
+/** Runs /authorize -> consent POST -> Google start -> Google callback. Returns the final redirect. */
+async function signIn(clientId: string, challenge: string, redirect = CLAUDE_CB): Promise<URL> {
+  const { request, cookie } = await consent(clientId, challenge, redirect);
+  const start = await startPost(request, cookie);
+  assert.equal(start.status, 303);
   const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
-  const cb = await fetch(`${base}/oauth/google/callback?code=google-code&state=${encodeURIComponent(state)}`, { redirect: "manual" });
+  const cb = await callback(state, cookie);
   assert.equal(cb.status, 302);
   return new URL(cb.headers.get("location")!);
 }
@@ -93,7 +130,7 @@ async function token(body: Record<string, string>) {
 }
 
 async function fullGrant() {
-  const client = await (await register()).json();
+  const client = await approvedClient();
   const { verifier, challenge } = pkce();
   const back = await signIn(client.client_id, challenge);
   const code = back.searchParams.get("code")!;
@@ -134,7 +171,7 @@ test("DCR rejects non-allowlisted redirect URIs and accepts Claude and loopback"
 });
 
 test("PKCE is required (missing or plain challenge refused)", async () => {
-  const client = await (await register()).json();
+  const client = await approvedClient();
   const noPkce = new URLSearchParams({ response_type: "code", client_id: client.client_id, redirect_uri: CLAUDE_CB });
   const r1 = await fetch(`${base}/authorize?${noPkce}`, { redirect: "manual" });
   assert.equal(r1.status, 302);
@@ -154,7 +191,7 @@ test("PKCE is required (missing or plain challenge refused)", async () => {
 test("a disallowed Google email gets no code", async () => {
   googleEmail = "stranger@example.com";
   try {
-    const client = await (await register()).json();
+    const client = await approvedClient();
     const back = await signIn(client.client_id, pkce().challenge);
     assert.equal(back.searchParams.get("error"), "access_denied");
     assert.equal(back.searchParams.get("code"), null);
@@ -240,10 +277,164 @@ test("revoked access token is refused", async () => {
 });
 
 test("a token for another resource is refused at /token", async () => {
-  const client = await (await register()).json();
+  const client = await approvedClient();
   const { verifier, challenge } = pkce();
   const code = (await signIn(client.client_id, challenge)).searchParams.get("code")!;
   const res = await token({ grant_type: "authorization_code", code, code_verifier: verifier, client_id: client.client_id, resource: "https://other.example/mcp" });
   assert.equal(res.status, 400);
   assert.equal((await res.json()).error, "invalid_target");
+});
+
+async function codeFor(client: { client_id: string }) {
+  const { verifier, challenge } = pkce();
+  const code = (await signIn(client.client_id, challenge)).searchParams.get("code")!;
+  assert.ok(code);
+  return { code, verifier };
+}
+
+test("an authorization code works once; the second exchange fails", async () => {
+  const client = await approvedClient();
+  const { code, verifier } = await codeFor(client);
+  const body = { grant_type: "authorization_code", code, code_verifier: verifier, client_id: client.client_id, redirect_uri: CLAUDE_CB };
+  assert.equal((await token(body)).status, 200);
+  const again = await token(body);
+  assert.equal(again.status, 400);
+  assert.equal((await again.json()).error, "invalid_grant");
+});
+
+test("redirect_uri mismatch at /token fails and burns the code", async () => {
+  const client = await approvedClient();
+  const { code, verifier } = await codeFor(client);
+  const bad = await token({ grant_type: "authorization_code", code, code_verifier: verifier, client_id: client.client_id, redirect_uri: "https://claude.com/api/mcp/auth_callback" });
+  assert.equal(bad.status, 400);
+  assert.equal((await bad.json()).error, "invalid_grant");
+  const retry = await token({ grant_type: "authorization_code", code, code_verifier: verifier, client_id: client.client_id, redirect_uri: CLAUDE_CB });
+  assert.equal(retry.status, 400);
+});
+
+test("an email removed from ALLOWED_EMAILS after a grant is refused at /mcp and at refresh", async () => {
+  const { client, tokens } = await fullGrant();
+  allowed.delete("allowed@example.com");
+  try {
+    const call = await fetch(`${base}/mcp`, { method: "POST", headers: { authorization: `Bearer ${tokens.access_token}`, "content-type": "application/json", accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+    assert.equal(call.status, 401);
+    const r = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+    assert.equal(r.status, 400);
+    assert.equal((await r.json()).error, "invalid_grant");
+  } finally {
+    allowed.add("allowed@example.com");
+  }
+});
+
+test("unknown or expired state at the Google callback is refused without a redirect", async () => {
+  const unknown = await callback("no-such-request", "mg_auth=whatever");
+  assert.equal(unknown.status, 400);
+  assert.equal(unknown.headers.get("location"), null);
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  const start = await startPost(request, cookie);
+  const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
+  clock += 11 * 60 * 1000;
+  try {
+    const late = await callback(state, cookie);
+    assert.equal(late.status, 400);
+    assert.equal(late.headers.get("location"), null);
+  } finally {
+    clock -= 11 * 60 * 1000;
+  }
+});
+
+test("a missing or mismatched browser-binding cookie is refused at start and callback", async () => {
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  // Start: no cookie, wrong cookie, and GET (the old link form) all refused.
+  assert.equal((await startPost(request)).status, 400);
+  assert.equal((await startPost(request, "mg_auth=forged")).status, 400);
+  const get = await fetch(`${base}/oauth/google/start?request=${encodeURIComponent(request)}`, { redirect: "manual" });
+  assert.equal(get.status, 405);
+  // Callback: the victim's browser has no matching cookie -> no code, no redirect; the request survives.
+  const start = await startPost(request, cookie);
+  assert.equal(start.status, 303);
+  const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
+  const other = await callback(state, "mg_auth=someone-else");
+  assert.equal(other.status, 400);
+  assert.equal(other.headers.get("location"), null);
+  assert.equal((await callback(state)).status, 400);
+  const ok = await callback(state, cookie);
+  assert.equal(ok.status, 302);
+  assert.ok(new URL(ok.headers.get("location")!).searchParams.get("code"));
+});
+
+test("a pending client gets an approval page and no code; once approved it signs in", async () => {
+  const client = await (await register()).json();
+  const { challenge } = pkce();
+  const res = await fetch(`${base}/authorize?${authorizeQuery(client.client_id, challenge)}`, { redirect: "manual" });
+  assert.equal(res.status, 403);
+  assert.equal(res.headers.get("set-cookie"), null);
+  const html = await res.text();
+  assert.match(html, /Awaiting approval on the host/);
+  assert.ok(html.includes(client.client_id));
+  assert.ok(html.includes(new Date(client.client_id_issued_at * 1000).toISOString()));
+  assert.ok(!html.includes("oauth/google/start"));
+  store.update((s) => approveClient(s, client.client_id, clock));
+  const back = await signIn(client.client_id, challenge);
+  assert.ok(back.searchParams.get("code"));
+});
+
+test("DCR never evicts: full registry refuses; approved clients survive; pending ones expire after 24 h", async () => {
+  const saved = structuredClone(store.data.clients);
+  try {
+    const approved = await approvedClient();
+    store.update((s) => {
+      for (let i = Object.keys(s.clients).length; i < MAX_CLIENTS; i++) {
+        s.clients[`filler-${i}`] = { client_id: `filler-${i}`, client_id_issued_at: Math.floor(clock / 1000), redirect_uris: [CLAUDE_CB] };
+      }
+    });
+    const full = await register();
+    assert.equal(full.status, 500);
+    assert.ok(store.data.clients[approved.client_id], "approved client kept");
+    // 24 h later the pending fillers expire and registration opens again; the approved client stays.
+    clock += PENDING_CLIENT_TTL_MS + 1000;
+    try {
+      assert.equal((await register()).status, 201);
+      assert.ok(store.data.clients[approved.client_id]);
+      assert.equal(Object.keys(store.data.clients).some((k) => k.startsWith("filler-")), false);
+    } finally {
+      clock -= PENDING_CLIENT_TTL_MS + 1000;
+    }
+  } finally {
+    store.update((s) => void (s.clients = saved));
+  }
+});
+
+test("oversized client metadata is refused", async () => {
+  const r = await fetch(`${base}/register`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": nextIp() },
+    body: JSON.stringify({ redirect_uris: [CLAUDE_CB], token_endpoint_auth_method: "none", client_name: "x".repeat(5000) }),
+  });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).error, "invalid_client_metadata");
+});
+
+test("revoking a refresh token ends its access tokens too", async () => {
+  const { client, tokens } = await fullGrant();
+  const rv = await fetch(`${base}/revoke`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: tokens.refresh_token, client_id: client.client_id }) });
+  assert.equal(rv.status, 200);
+  const res = await fetch(`${base}/mcp`, { method: "POST", headers: { authorization: `Bearer ${tokens.access_token}`, "content-type": "application/json" }, body: "{}" });
+  assert.equal(res.status, 401);
+});
+
+test("rate limits key on the forwarded client IP from the loopback proxy", async () => {
+  const saved = structuredClone(store.data.clients);
+  try {
+    const statuses: number[] = [];
+    for (let i = 0; i < 21; i++) statuses.push((await register(CLAUDE_CB, "198.51.100.7")).status);
+    assert.equal(statuses.filter((x) => x === 201).length, 20);
+    assert.equal(statuses[20], 429);
+    // Another public client behind the same Funnel is not affected.
+    assert.equal((await register(CLAUDE_CB, "198.51.100.8")).status, 201);
+  } finally {
+    store.update((s) => void (s.clients = saved));
+  }
 });
