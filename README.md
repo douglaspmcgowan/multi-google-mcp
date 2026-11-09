@@ -223,6 +223,10 @@ Claude Code will pick the right tool and use the account label you specified.
 
 ---
 
+## Remote Connector (claude.ai)
+
+`node dist/index.js --http` (or `MCP_TRANSPORT=http`) serves the same tools over Streamable HTTP on `127.0.0.1:$PORT` (default 8787), protected by its own OAuth 2.1 server (DCR, PKCE S256, rotating refresh tokens) whose sign-in step is Google, limited to `ALLOWED_EMAILS`. State and Google tokens live in an AES-256-GCM file keyed by `MULTI_GOOGLE_STORE_KEY` (`npm run store:keygen`, `npm run store:migrate`). Host setup: [deploy/README.md](deploy/README.md).
+
 ## Troubleshooting
 
 **"This app hasn't completed the Google verification process"**

@@ -51,7 +51,22 @@ function ensureConfigDir(): void {
   }
 }
 
+/**
+ * Optional storage override. HTTP (connector) mode points this at the
+ * encrypted store so Google tokens never touch the plaintext config.json.
+ */
+export interface ConfigBackend {
+  load(): Config;
+  save(config: Config): void;
+}
+let backend: ConfigBackend | undefined;
+
+export function setConfigBackend(b: ConfigBackend | undefined): void {
+  backend = b;
+}
+
 export function loadConfig(): Config {
+  if (backend) return backend.load();
   ensureConfigDir();
   if (!fs.existsSync(configFile)) {
     return { clientId: "", clientSecret: "", accounts: {} };
@@ -60,6 +75,7 @@ export function loadConfig(): Config {
 }
 
 export function saveConfig(config: Config): void {
+  if (backend) return backend.save(config);
   ensureConfigDir();
   fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
   fs.chmodSync(configFile, 0o600); // restrict permissions — tokens are sensitive

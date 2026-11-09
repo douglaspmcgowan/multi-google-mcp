@@ -56,6 +56,8 @@ be doing this in browser in the future."*
 
 - [x] Full Forms API coverage, Douglas 2026-10-23: "update the multi-google mcp to have all forms capabilities." (branch agent/forms-full-20261023)
 
+- [x] Remote connector (Streamable HTTP + own OAuth 2.1 AS, Google sign-in gated by ALLOWED_EMAILS, encrypted store, audit log, local-path refusal, SYSTEMATICCHAOS host scripts), Douglas 2026-11-07/08: "make a multi-google thing in cloud." Task mgm-c58d314c; tests `test/http-*.test.ts`, `test/stdio-mode.test.ts`.
+
 ## Needs decision
 
 <!-- Record items requiring a user decision here. -->
