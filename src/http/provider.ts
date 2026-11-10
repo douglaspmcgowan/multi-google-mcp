@@ -66,7 +66,8 @@ export interface PendingAuthorization {
   state?: string;
   scopes: string[];
   resource?: string;
-  googleVerifier: string;
+  /** OpenID Connect nonce sent to Google; the returned ID token must echo it. */
+  googleNonce: string;
   /** sha256 of the browser-binding cookie set at /authorize; the start and callback steps require it. */
   bindingHash: string;
   expiresAt: number;
@@ -74,6 +75,11 @@ export interface PendingAuthorization {
 
 /** Name of the HttpOnly cookie that binds a sign-in to the browser that started it. */
 export const BINDING_COOKIE = "mg_auth";
+/**
+ * Google's form_post callback is a cross-site top-level POST from accounts.google.com, which SameSite=Lax
+ * cookies are not sent with. SameSite=None requires Secure. State and nonce are single-use, so CSRF stays closed.
+ */
+export const BINDING_COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "none" as const, path: "/" };
 
 /** True when the client has live (unexpired) access or refresh tokens. Pure. */
 export function clientHasLiveTokens(s: StoreState, clientId: string, now: number): boolean {
@@ -187,19 +193,13 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
       state: params.state,
       scopes: params.scopes ?? [],
       resource,
-      googleVerifier: crypto.randomBytes(48).toString("base64url"),
+      googleNonce: rand(),
       bindingHash: sha256(binding),
       expiresAt: this.now() + PENDING_TTL_MS,
     });
     const host = new URL(params.redirectUri).host;
     const name = escapeHtml(typeof client.client_name === "string" ? client.client_name : "An MCP client");
-    res.cookie(BINDING_COOKIE, binding, {
-      httpOnly: true,
-      secure: this.opts.resourceUrl.protocol === "https:",
-      sameSite: "lax",
-      path: "/",
-      maxAge: PENDING_TTL_MS,
-    });
+    res.cookie(BINDING_COOKIE, binding, { ...BINDING_COOKIE_OPTIONS, maxAge: PENDING_TTL_MS });
     page(res, 200)
       .set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://accounts.google.com; frame-ancestors 'none'")
       .send(

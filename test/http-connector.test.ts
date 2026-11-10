@@ -9,24 +9,38 @@ import type { AddressInfo } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { EncryptedStore } from "../src/http/store.js";
-import { createConnectorApp, fileAuditor, type GoogleSignIn } from "../src/http/app.js";
+import { createConnectorApp, fileAuditor, googleSignIn } from "../src/http/app.js";
 import { approveClient, isAllowedRedirect, MAX_CLIENTS, PENDING_CLIENT_TTL_MS } from "../src/http/provider.js";
 import { setConfigBackend } from "../src/config.js";
+import { OAuth2Client } from "google-auth-library";
 
 const CLAUDE_CB = "https://claude.ai/api/mcp/auth_callback";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mgm-http-"));
 const auditFile = path.join(dir, "audit.log");
 let clock = Date.now();
 let googleEmail = "allowed@example.com";
-const googleCalls: string[] = [];
-let googleVerified = true;
-const fakeGoogle: GoogleSignIn = {
-  authUrl: ({ state }) => `https://accounts.google.com/o/oauth2/v2/auth?state=${encodeURIComponent(state)}`,
-  exchange: async ({ code }) => {
-    googleCalls.push(code);
-    return { email: googleEmail, emailVerified: googleVerified };
-  },
-};
+// Google's signing key is a local RSA key; the sign-in client verifies real ID-token signatures against it offline.
+const { privateKey: googleKey, publicKey: googlePublic } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
+const GOOGLE_KID = "test-kid";
+const SIGNIN_CLIENT = "fixture-signin.apps.googleusercontent.com";
+const fakeGoogle = googleSignIn(SIGNIN_CLIENT, (id) => {
+  const c = new OAuth2Client(id);
+  (c as any).getFederatedSignonCertsAsync = async () => ({ certs: { [GOOGLE_KID]: googlePublic.export({ type: "spki", format: "pem" }).toString() } });
+  return c;
+});
+
+/** A Google ID token signed by the test key: aud = sign-in client, iss = Google, the nonce Google echoes. */
+function idToken(claims: Record<string, unknown>): string {
+  const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const head = b64({ alg: "RS256", typ: "JWT", kid: GOOGLE_KID });
+  const body = b64(claims);
+  const sig = crypto.sign("RSA-SHA256", Buffer.from(`${head}.${body}`), googleKey).toString("base64url");
+  return `${head}.${body}.${sig}`;
+}
+const nowSec = () => Math.floor(Date.now() / 1000);
+/** The ID token Google would return for a sign-in that echoes `nonce`. */
+const tokenFor = (nonce: string, claims: Record<string, unknown> = {}) =>
+  idToken({ iss: "https://accounts.google.com", aud: SIGNIN_CLIENT, sub: "1", email: googleEmail, email_verified: true, nonce, iat: nowSec() - 10, exp: nowSec() + 600, ...claims });
 
 let base = "";
 let server: http.Server;
@@ -49,6 +63,7 @@ test.before(async () => {
     store,
     publicBaseUrl: base,
     allowedEmails: allowed,
+    signInClientId: SIGNIN_CLIENT,
     google: fakeGoogle,
     audit: fileAuditor(auditFile),
     now: () => clock,
@@ -98,7 +113,8 @@ async function consent(clientId: string, challenge: string, redirect = CLAUDE_CB
   const setCookie = res.headers.get("set-cookie")!;
   assert.match(setCookie, /mg_auth=/);
   assert.match(setCookie, /HttpOnly/i);
-  assert.match(setCookie, /SameSite=Lax/i);
+  assert.match(setCookie, /SameSite=None/i);
+  assert.match(setCookie, /Secure/i);
   const request = html.match(/name="request" value="([^"]+)"/)![1];
   return { request, cookie: setCookie.split(";")[0] };
 }
@@ -111,16 +127,30 @@ const startPost = (request: string, cookie?: string) =>
     body: new URLSearchParams({ request }),
   });
 
-const callback = (state: string, cookie?: string) =>
-  fetch(`${base}/oauth/google/callback?code=google-code&state=${encodeURIComponent(state)}`, { redirect: "manual", headers: cookie ? { cookie } : {} });
+/** The Google authorization URL the start step redirects to: its state and nonce. */
+function googleParams(start: Response) {
+  const u = new URL(start.headers.get("location")!);
+  assert.equal(u.origin, "https://accounts.google.com");
+  assert.equal(u.searchParams.get("response_mode"), "form_post");
+  return { state: u.searchParams.get("state")!, nonce: u.searchParams.get("nonce")! };
+}
 
-/** Runs /authorize -> consent POST -> Google start -> Google callback. Returns the final redirect. */
+/** Google's form_post return: a cross-site POST carrying the ID token and the state. */
+const callback = (state: string, cookie: string | undefined, id_token: string) =>
+  fetch(`${base}/oauth/google/callback`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...(cookie ? { cookie } : {}) },
+    body: new URLSearchParams({ state, id_token }),
+  });
+
+/** Runs /authorize -> consent POST -> Google start -> Google form_post callback. Returns the final redirect. */
 async function signIn(clientId: string, challenge: string, redirect = CLAUDE_CB): Promise<URL> {
   const { request, cookie } = await consent(clientId, challenge, redirect);
   const start = await startPost(request, cookie);
   assert.equal(start.status, 303);
-  const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
-  const cb = await callback(state, cookie);
+  const { state, nonce } = googleParams(start);
+  const cb = await callback(state, cookie, tokenFor(nonce));
   assert.equal(cb.status, 302);
   return new URL(cb.headers.get("location")!);
 }
@@ -327,16 +357,16 @@ test("an email removed from ALLOWED_EMAILS after a grant is refused at /mcp and 
 });
 
 test("unknown or expired state at the Google callback is refused without a redirect", async () => {
-  const unknown = await callback("no-such-request", "mg_auth=whatever");
+  const unknown = await callback("no-such-request", "mg_auth=whatever", tokenFor("n"));
   assert.equal(unknown.status, 400);
   assert.equal(unknown.headers.get("location"), null);
   const client = await approvedClient();
   const { request, cookie } = await consent(client.client_id, pkce().challenge);
   const start = await startPost(request, cookie);
-  const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
+  const { state, nonce } = googleParams(start);
   clock += 11 * 60 * 1000;
   try {
-    const late = await callback(state, cookie);
+    const late = await callback(state, cookie, tokenFor(nonce));
     assert.equal(late.status, 400);
     assert.equal(late.headers.get("location"), null);
   } finally {
@@ -355,14 +385,76 @@ test("a missing or mismatched browser-binding cookie is refused at start and cal
   // Callback: the victim's browser has no matching cookie -> no code, no redirect; the request survives.
   const start = await startPost(request, cookie);
   assert.equal(start.status, 303);
-  const state = new URL(start.headers.get("location")!).searchParams.get("state")!;
-  const other = await callback(state, "mg_auth=someone-else");
+  const { state, nonce } = googleParams(start);
+  const other = await callback(state, "mg_auth=someone-else", tokenFor(nonce));
   assert.equal(other.status, 400);
   assert.equal(other.headers.get("location"), null);
-  assert.equal((await callback(state)).status, 400);
-  const ok = await callback(state, cookie);
+  assert.equal((await callback(state, undefined, tokenFor(nonce))).status, 400);
+  const ok = await callback(state, cookie, tokenFor(nonce));
   assert.equal(ok.status, 302);
   assert.ok(new URL(ok.headers.get("location")!).searchParams.get("code"));
+});
+
+test("a GET to the callback does not complete sign-in; the POST still does", async () => {
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  const start = await startPost(request, cookie);
+  const { state, nonce } = googleParams(start);
+  const get = await fetch(`${base}/oauth/google/callback?state=${encodeURIComponent(state)}&id_token=${tokenFor(nonce)}`, { redirect: "manual", headers: { cookie } });
+  assert.equal(get.status, 405);
+  assert.equal(get.headers.get("location"), null);
+  // The GET consumed nothing: the POST with the same state and cookie completes.
+  const ok = await callback(state, cookie, tokenFor(nonce));
+  assert.equal(ok.status, 302);
+  assert.ok(new URL(ok.headers.get("location")!).searchParams.get("code"));
+});
+
+test("a nonce that does not match the request is refused without a code", async () => {
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  const start = await startPost(request, cookie);
+  const { state } = googleParams(start);
+  const bad = await callback(state, cookie, tokenFor("some-other-nonce"));
+  assert.equal(bad.status, 302);
+  const back = new URL(bad.headers.get("location")!);
+  assert.equal(back.searchParams.get("error"), "access_denied");
+  assert.equal(back.searchParams.get("code"), null);
+  assert.equal(back.searchParams.get("state"), "st-1");
+  // The mismatched attempt used up the request: the right nonce now finds nothing.
+  const { nonce } = googleParams(start);
+  assert.equal((await callback(state, cookie, tokenFor(nonce))).status, 400);
+});
+
+test("an ID token with email_verified false or the wrong audience gets no code", async () => {
+  const client = await approvedClient();
+  const unverified = await consent(client.client_id, pkce().challenge);
+  const s1 = await startPost(unverified.request, unverified.cookie);
+  const p1 = googleParams(s1);
+  const r1 = await callback(p1.state, unverified.cookie, tokenFor(p1.nonce, { email_verified: false }));
+  assert.equal(new URL(r1.headers.get("location")!).searchParams.get("error"), "access_denied");
+  assert.equal(new URL(r1.headers.get("location")!).searchParams.get("code"), null);
+
+  const wrongAud = await consent(client.client_id, pkce().challenge);
+  const s2 = await startPost(wrongAud.request, wrongAud.cookie);
+  const p2 = googleParams(s2);
+  const r2 = await callback(p2.state, wrongAud.cookie, tokenFor(p2.nonce, { aud: "someone-else.apps.googleusercontent.com" }));
+  assert.equal(r2.status, 302);
+  assert.equal(new URL(r2.headers.get("location")!).searchParams.get("error"), "server_error");
+  assert.equal(new URL(r2.headers.get("location")!).searchParams.get("code"), null);
+});
+
+test("a replayed sign-in (same state, same ID token) is refused after the first completes", async () => {
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  const start = await startPost(request, cookie);
+  const { state, nonce } = googleParams(start);
+  const token = tokenFor(nonce);
+  const first = await callback(state, cookie, token);
+  assert.equal(first.status, 302);
+  assert.ok(new URL(first.headers.get("location")!).searchParams.get("code"));
+  const replay = await callback(state, cookie, token);
+  assert.equal(replay.status, 400);
+  assert.equal(replay.headers.get("location"), null);
 });
 
 test("a pending client gets an approval page and no code; once approved it signs in", async () => {
