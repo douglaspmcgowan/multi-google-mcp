@@ -27,6 +27,12 @@ param(
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'FunnelMount.psm1') -Force
 
+# Without -SignInClientId, keep a sign-in client id already in the User environment instead of the default.
+$existingSignInClientId = [Environment]::GetEnvironmentVariable('MULTI_GOOGLE_SIGNIN_CLIENT_ID', 'User')
+if (-not $PSBoundParameters.ContainsKey('SignInClientId') -and $existingSignInClientId) {
+  $SignInClientId = $existingSignInClientId
+}
+
 foreach ($cmd in 'node', 'npm', 'tailscale') {
   if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { throw "$cmd is not on PATH." }
 }
@@ -85,7 +91,9 @@ if ($rootProxy -and $rootProxy.TrimEnd('/') -eq $legacyTarget) {
 
 $pwsh = (Get-Command pwsh).Source
 $startScript = Join-Path $PSScriptRoot 'Start-Connector.ps1'
-$user = "$env:USERDOMAIN\$env:USERNAME"
+# Account name as Windows resolves it. "$env:USERDOMAIN\$env:USERNAME" is WORKGROUP\<user> on a non-domain
+# (Microsoft-account) login, which Register-ScheduledTask cannot map to a SID.
+$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 if ($PSCmdlet.ShouldProcess($TaskName, 'Register Scheduled Task (at logon, restart on failure)')) {
   $action = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -File `"$startScript`" -RepoPath `"$RepoPath`"" -WorkingDirectory $RepoPath
   $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user

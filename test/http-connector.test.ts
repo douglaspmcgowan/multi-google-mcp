@@ -425,6 +425,21 @@ test("a nonce that does not match the request is refused without a code", async 
   assert.equal((await callback(state, cookie, tokenFor(nonce))).status, 400);
 });
 
+test("an ID token without a nonce claim is refused without a code", async () => {
+  const client = await approvedClient();
+  const { request, cookie } = await consent(client.client_id, pkce().challenge);
+  const start = await startPost(request, cookie);
+  const { state, nonce } = googleParams(start);
+  const noNonce = idToken({ iss: "https://accounts.google.com", aud: SIGNIN_CLIENT, sub: "1", email: googleEmail, email_verified: true, iat: nowSec() - 10, exp: nowSec() + 600 });
+  const bad = await callback(state, cookie, noNonce);
+  assert.equal(bad.status, 302);
+  const back = new URL(bad.headers.get("location")!);
+  assert.equal(back.searchParams.get("error"), "access_denied");
+  assert.equal(back.searchParams.get("code"), null);
+  // The refused attempt used up the request: the right nonce now finds nothing.
+  assert.equal((await callback(state, cookie, tokenFor(nonce))).status, 400);
+});
+
 test("an ID token with email_verified false or the wrong audience gets no code", async () => {
   const client = await approvedClient();
   const unverified = await consent(client.client_id, pkce().challenge);
