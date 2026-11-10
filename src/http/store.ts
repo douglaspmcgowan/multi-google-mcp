@@ -108,6 +108,27 @@ export const LOCK_STALE_MS = 10_000;
 const LOCK_WAIT_MS = 5_000;
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
+/**
+ * On Windows a rename over, or a read of, a file another process has open
+ * (a reader, an antivirus scan) fails with a transient code. Retry those with
+ * growing waits for about 2 s, then rethrow.
+ */
+const TRANSIENT_FILE_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
+const TRANSIENT_RETRY_MS = 2_000;
+function retryTransient<T>(op: () => T): T {
+  const deadline = Date.now() + TRANSIENT_RETRY_MS;
+  let wait = 10;
+  for (;;) {
+    try {
+      return op();
+    } catch (e: any) {
+      if (!TRANSIENT_FILE_CODES.has(e?.code) || Date.now() > deadline) throw e;
+      sleepSync(wait);
+      wait = Math.min(wait * 2, 200);
+    }
+  }
+}
+
 function acquireLock(lock: string): number {
   const deadline = Date.now() + LOCK_WAIT_MS;
   for (;;) {
@@ -116,14 +137,16 @@ function acquireLock(lock: string): number {
       fs.writeSync(fd, String(process.pid));
       return fd;
     } catch (e: any) {
-      if (e?.code !== "EEXIST") throw e;
+      // Windows reports EPERM/EACCES while another process's lock file is pending deletion.
+      if (e?.code !== "EEXIST" && e?.code !== "EPERM" && e?.code !== "EACCES") throw e;
       try {
         if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS) {
           fs.rmSync(lock, { force: true });
           continue;
         }
-      } catch {
-        continue; // vanished between open and stat
+      } catch (s: any) {
+        if (s?.code === "ENOENT") continue; // vanished between open and stat
+        // Any other stat failure falls through to the deadline check and the wait below.
       }
       if (Date.now() > deadline) throw new Error(`Store is locked (${lock}); retry, or delete the lock file if no multi-google process is running.`);
       sleepSync(20);
@@ -155,19 +178,22 @@ export class EncryptedStore {
   }
 
   private fileStamp(): string {
+    let st: fs.Stats;
     try {
-      const st = fs.statSync(this.file);
-      return `${st.ino}:${st.size}:${st.mtimeMs}`;
-    } catch {
+      st = retryTransient(() => fs.statSync(this.file));
+    } catch (e: any) {
+      // A transient failure must not read as "file absent": reload would then drop the state.
+      if (TRANSIENT_FILE_CODES.has(e?.code)) throw e;
       return "";
     }
+    return `${st.ino}:${st.size}:${st.mtimeMs}`;
   }
 
   /** Re-reads the file when another process (a CLI, another server) changed it. */
   private reload(): void {
     const stamp = this.fileStamp();
     if (stamp === this.stamp) return;
-    this.state = stamp ? { ...emptyState(), ...JSON.parse(decrypt(this.key, fs.readFileSync(this.file, "utf8"))) } : emptyState();
+    this.state = stamp ? { ...emptyState(), ...JSON.parse(decrypt(this.key, retryTransient(() => fs.readFileSync(this.file, "utf8")))) } : emptyState();
     this.stamp = stamp;
   }
 
@@ -203,7 +229,12 @@ export class EncryptedStore {
   private write(): void {
     const tmp = `${this.file}.${process.pid}.${crypto.randomBytes(4).toString("hex")}.tmp`;
     fs.writeFileSync(tmp, encrypt(this.key, JSON.stringify(this.state)), { mode: 0o600 });
-    fs.renameSync(tmp, this.file);
+    try {
+      retryTransient(() => fs.renameSync(tmp, this.file));
+    } catch (e) {
+      fs.rmSync(tmp, { force: true });
+      throw e;
+    }
     try {
       fs.chmodSync(this.file, 0o600);
     } catch {
