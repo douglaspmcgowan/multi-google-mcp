@@ -5,7 +5,8 @@
 .DESCRIPTION
   1. Checks node, npm, tailscale, and that MULTI_GOOGLE_STORE_KEY exists in the User environment (by name only; the value is never read).
   2. npm ci + npm run build.
-  3. Sets User env MULTI_GOOGLE_PUBLIC_BASE_URL (this node's Funnel URL) and MULTI_GOOGLE_PORT. No generic variable
+  3. Sets User env MULTI_GOOGLE_PUBLIC_BASE_URL (this node's Funnel URL), MULTI_GOOGLE_PORT, and MULTI_GOOGLE_SIGNIN_CLIENT_ID
+     (the public id of the Google Web application client "Multi-Email Claude Connection"; it has no secret). No generic variable
      (PORT, PUBLIC_BASE_URL) is written: other dev servers read those, and one landing on the Funnel port would be served
      publicly without auth. Removes PORT / PUBLIC_BASE_URL User values that the previous installer version wrote
      (only when they still hold the values it wrote: PORT=8787, PUBLIC_BASE_URL=this node's Funnel URL).
@@ -19,7 +20,9 @@
 param(
   [string]$RepoPath = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
   [int]$Port = 47887,
-  [string]$TaskName = 'multi-google-connector'
+  [string]$TaskName = 'multi-google-connector',
+  # Public id (not a secret) of the Google Web application client that signs connector users in.
+  [string]$SignInClientId = '307531147351-smh5oaqjhbsf64pmrc2ko4gjanno49bf.apps.googleusercontent.com'
 )
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'FunnelMount.psm1') -Force
@@ -56,9 +59,10 @@ if ($PSCmdlet.ShouldProcess($RepoPath, 'npm ci; npm run build')) {
   } finally { Pop-Location }
 }
 
-if ($PSCmdlet.ShouldProcess('User environment', "Set MULTI_GOOGLE_PUBLIC_BASE_URL=$publicBaseUrl, MULTI_GOOGLE_PORT=$Port")) {
+if ($PSCmdlet.ShouldProcess('User environment', "Set MULTI_GOOGLE_PUBLIC_BASE_URL=$publicBaseUrl, MULTI_GOOGLE_PORT=$Port, MULTI_GOOGLE_SIGNIN_CLIENT_ID=$SignInClientId")) {
   [Environment]::SetEnvironmentVariable('MULTI_GOOGLE_PUBLIC_BASE_URL', $publicBaseUrl, 'User')
   [Environment]::SetEnvironmentVariable('MULTI_GOOGLE_PORT', [string]$Port, 'User')
+  [Environment]::SetEnvironmentVariable('MULTI_GOOGLE_SIGNIN_CLIENT_ID', $SignInClientId, 'User')
 }
 
 # Previous version wrote generic PORT / PUBLIC_BASE_URL. Remove them only if they still hold its values.
@@ -98,6 +102,6 @@ if ($PSCmdlet.ShouldProcess($TaskName, 'Register Scheduled Task (at logon, resta
 Write-Host ''
 Write-Host "Connector URL (claude.ai > Settings > Connectors > Add custom connector):"
 Write-Host "  $publicBaseUrl/mcp"
-Write-Host "Google OAuth redirect URI to add in Google Cloud console:"
+Write-Host "Sign-in Google client must list this redirect URI (Google Cloud console, client 'Multi-Email Claude Connection'):"
 Write-Host "  $publicBaseUrl/oauth/google/callback"
 Write-Host "After adding the connector, approve it on this host (deploy/README.md step 7)."
