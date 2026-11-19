@@ -18,6 +18,8 @@ import {
 import { EncryptedStore, sha256, type StoreState, type StoredClient, type TokenRecord } from "./store.js";
 
 export const ACCESS_TTL_MS = 60 * 60 * 1000; // 1 h
+/** A just-rotated refresh token may be presented again by the same client within this window (RFC 9700 4.14.2: concurrent refreshes). */
+export const REFRESH_REUSE_GRACE_MS = 60 * 1000;
 export const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 d
 export const CODE_TTL_MS = 5 * 60 * 1000;
 export const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -340,9 +342,26 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     const s = this.opts.store.data;
     const used = s.usedRefreshTokens[h];
     if (used) {
-      // Replay of a rotated token: assume theft and revoke the whole grant.
-      this.revokeFamily(used.family);
-      throw new InvalidGrantError("Refresh token already used");
+      const withinGrace =
+        used.clientId === client.client_id &&
+        used.usedAt !== undefined &&
+        this.now() - used.usedAt <= REFRESH_REUSE_GRACE_MS &&
+        used.expiresAt > this.now();
+      if (!withinGrace) {
+        // Replay outside the grace window (or by another client): assume theft and revoke the whole grant.
+        this.revokeFamily(used.family);
+        throw new InvalidGrantError("Refresh token already used");
+      }
+      // Concurrent refresh by the same client: issue another pair in the same family.
+      const meta = [...Object.values(s.refreshTokens), ...Object.values(s.accessTokens)].find((t) => t.family === used.family);
+      if (!meta) throw new InvalidGrantError("Refresh token already used");
+      if (scopes && scopes.some((x) => !meta.scopes.includes(x))) throw new InvalidGrantError("Requested scope exceeds grant");
+      const gres = resource ? this.checkResource(resource) : meta.resource;
+      if (!this.isEmailAllowed(meta.email)) {
+        this.revokeFamily(used.family);
+        throw new InvalidGrantError("Account no longer allowed");
+      }
+      return this.issueTokens(meta.clientId, meta.email, scopes ?? meta.scopes, gres, used.family);
     }
     const rec = s.refreshTokens[h];
     if (!rec || rec.clientId !== client.client_id || rec.expiresAt <= this.now()) {
@@ -352,7 +371,7 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     const res = resource ? this.checkResource(resource) : rec.resource;
     this.opts.store.update((st) => {
       delete st.refreshTokens[h];
-      st.usedRefreshTokens[h] = { family: rec.family, expiresAt: rec.expiresAt };
+      st.usedRefreshTokens[h] = { family: rec.family, expiresAt: rec.expiresAt, usedAt: this.now(), clientId: rec.clientId };
     });
     if (!this.isEmailAllowed(rec.email)) {
       this.revokeFamily(rec.family);

@@ -10,7 +10,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { EncryptedStore } from "../src/http/store.js";
 import { createConnectorApp, fileAuditor, googleSignIn } from "../src/http/app.js";
-import { approveClient, isAllowedRedirect, MAX_CLIENTS, PENDING_CLIENT_TTL_MS } from "../src/http/provider.js";
+import { approveClient, isAllowedRedirect, MAX_CLIENTS, PENDING_CLIENT_TTL_MS, REFRESH_REUSE_GRACE_MS } from "../src/http/provider.js";
 import { setConfigBackend } from "../src/config.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -282,6 +282,44 @@ test("refresh rotates and invalidates the old refresh token; replay revokes the 
   // The replay revoked the rotated family too.
   const r3 = await token({ grant_type: "refresh_token", refresh_token: t2.refresh_token, client_id: client.client_id });
   assert.equal(r3.status, 400);
+});
+
+test("a concurrent refresh with the same token inside the grace window succeeds and keeps the grant alive", async () => {
+  const { client, tokens } = await fullGrant();
+  const a = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+  assert.equal(a.status, 200);
+  clock += 2000;
+  const b = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+  assert.equal(b.status, 200);
+  const tb = await b.json();
+  assert.ok(tb.access_token && tb.refresh_token);
+  // Both successors stay usable: the grant was not revoked.
+  const ta = await a.json();
+  for (const t of [ta, tb]) {
+    const r = await token({ grant_type: "refresh_token", refresh_token: t.refresh_token, client_id: client.client_id });
+    assert.equal(r.status, 200);
+  }
+});
+
+test("reuse of a rotated refresh token after the grace window still revokes the family", async () => {
+  const { client, tokens } = await fullGrant();
+  const a = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+  const ta = await a.json();
+  clock += REFRESH_REUSE_GRACE_MS + 1000;
+  const late = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+  assert.equal(late.status, 400);
+  const after = await token({ grant_type: "refresh_token", refresh_token: ta.refresh_token, client_id: client.client_id });
+  assert.equal(after.status, 400);
+});
+
+test("a rotated refresh token presented by a different client inside the window is refused", async () => {
+  const { client, tokens } = await fullGrant();
+  const other = await approvedClient();
+  const a = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
+  assert.equal(a.status, 200);
+  const x = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: other.client_id });
+  assert.equal(x.status, 400);
+  assert.equal((await x.json()).error, "invalid_grant");
 });
 
 test("expired access token is refused with 401", async () => {

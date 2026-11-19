@@ -55,7 +55,7 @@ export interface StoreState {
   /** sha256(refresh token) -> record */
   refreshTokens: Record<string, TokenRecord>;
   /** sha256(rotated refresh token) -> { family, expiresAt }; a replay revokes the family. */
-  usedRefreshTokens: Record<string, { family: string; expiresAt: number }>;
+  usedRefreshTokens: Record<string, { family: string; expiresAt: number; usedAt?: number; clientId?: string }>;
 }
 
 export function emptyState(): StoreState {
