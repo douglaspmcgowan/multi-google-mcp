@@ -276,6 +276,7 @@ test("refresh rotates and invalidates the old refresh token; replay revokes the 
   assert.equal(r1.status, 200);
   const t2 = await r1.json();
   assert.notEqual(t2.refresh_token, tokens.refresh_token);
+  clock += REFRESH_REUSE_GRACE_MS + 1000;
   const replay = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token, client_id: client.client_id });
   assert.equal(replay.status, 400);
   assert.equal((await replay.json()).error, "invalid_grant");
