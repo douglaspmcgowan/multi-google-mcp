@@ -18,8 +18,13 @@ import {
 import { EncryptedStore, sha256, type StoreState, type StoredClient, type TokenRecord } from "./store.js";
 
 export const ACCESS_TTL_MS = 60 * 60 * 1000; // 1 h
-/** A just-rotated refresh token may be presented again by the same client within this window (RFC 9700 4.14.2: concurrent refreshes). */
-export const REFRESH_REUSE_GRACE_MS = 60 * 1000;
+/**
+ * A rotated refresh token presented again by the SAME client is honoured until it expires.
+ * claude.ai refreshes one grant from two components (its backend and mcp-proxy.anthropic.com),
+ * so the second presents an already-rotated token up to an access-token lifetime later.
+ * Revoking on that replay killed the grant about every hour ("sign-in expired", 2026-11-23).
+ * Presentation by a DIFFERENT client is still treated as theft and revokes the family.
+ */
 export const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 d
 export const CODE_TTL_MS = 5 * 60 * 1000;
 export const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -342,17 +347,13 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
     const s = this.opts.store.data;
     const used = s.usedRefreshTokens[h];
     if (used) {
-      const withinGrace =
-        used.clientId === client.client_id &&
-        used.usedAt !== undefined &&
-        this.now() - used.usedAt <= REFRESH_REUSE_GRACE_MS &&
-        used.expiresAt > this.now();
-      if (!withinGrace) {
-        // Replay outside the grace window (or by another client): assume theft and revoke the whole grant.
+      if (used.expiresAt <= this.now()) throw new InvalidGrantError("Invalid or expired refresh token");
+      if (used.clientId !== client.client_id) {
+        // Replay by another client: assume theft and revoke the whole grant.
         this.revokeFamily(used.family);
         throw new InvalidGrantError("Refresh token already used");
       }
-      // Concurrent refresh by the same client: issue another pair in the same family.
+      // Same client presenting a rotated token (claude.ai's second refresher): issue another pair in the same family.
       const meta = [...Object.values(s.refreshTokens), ...Object.values(s.accessTokens)].find((t) => t.family === used.family);
       if (!meta) throw new InvalidGrantError("Refresh token already used");
       if (scopes && scopes.some((x) => !meta.scopes.includes(x))) throw new InvalidGrantError("Requested scope exceeds grant");
