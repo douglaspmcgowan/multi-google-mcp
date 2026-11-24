@@ -22,6 +22,8 @@ export interface StoredClient {
   redirect_uris: string[];
   /** Set by `npm run clients:approve`; a client without it is pending and gets no code. */
   approved_at?: number;
+  /** Set when the connector approved a hosted-Claude client at registration. */
+  auto_approved?: boolean;
   [k: string]: unknown;
 }
 
