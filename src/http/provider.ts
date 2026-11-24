@@ -93,10 +93,14 @@ export function clientHasLiveTokens(s: StoreState, clientId: string, now: number
   return [s.accessTokens, s.refreshTokens].some((bag) => Object.values(bag).some((t) => t.clientId === clientId && t.expiresAt > now));
 }
 
-/** Drops pending (unapproved) clients older than PENDING_CLIENT_TTL_MS. */
+/**
+ * Drops pending (unapproved) clients older than PENDING_CLIENT_TTL_MS, and auto-approved clients that old
+ * with no live tokens, so registrations that never signed in cannot fill the registry.
+ */
 export function expirePendingClients(s: StoreState, now: number): void {
   for (const [id, c] of Object.entries(s.clients)) {
-    if (!c.approved_at && (c.client_id_issued_at ?? 0) * 1000 + PENDING_CLIENT_TTL_MS <= now) delete s.clients[id];
+    const old = (c.client_id_issued_at ?? 0) * 1000 + PENDING_CLIENT_TTL_MS <= now;
+    if (old && (!c.approved_at || (c.auto_approved && !clientHasLiveTokens(s, id, now)))) delete s.clients[id];
   }
 }
 
@@ -154,7 +158,16 @@ export class ConnectorOAuthProvider implements OAuthServerProvider {
         }
         const id = full.client_id ?? crypto.randomUUID();
         const record: StoredClient = { ...(full as StoredClient), client_id: id, client_id_issued_at: full.client_id_issued_at ?? Math.floor(now() / 1000) };
-        delete record.approved_at; // only the host CLI approves
+        delete record.approved_at;
+        delete record.auto_approved;
+        // Douglas, 2026-11-23: no "approve on the host" page when he clicks Connect. claude.ai registers a new
+        // client on every Reconnect, so a client that can only redirect to the hosted Claude callback is approved
+        // here; the code still goes only to claude.ai, and only an allowlisted Google account can sign in.
+        // Loopback clients still need npm run clients:approve on the host.
+        if (uris.every((u) => ALLOWED_REDIRECTS.includes(String(u)))) {
+          record.approved_at = Math.floor(now() / 1000);
+          record.auto_approved = true;
+        }
         store.update((s) => {
           expirePendingClients(s, now());
           // Never evict: an approved client or one with live tokens is Douglas's connection.

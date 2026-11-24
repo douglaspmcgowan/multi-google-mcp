@@ -511,10 +511,30 @@ test("a replayed sign-in (same state, same ID token) is refused after the first 
   assert.equal(replay.headers.get("location"), null);
 });
 
-test("a pending client gets an approval page and no code; once approved it signs in", async () => {
+test("a claude.ai client is approved at registration and signs in with no host step", async () => {
   const client = await (await register()).json();
+  assert.ok(store.data.clients[client.client_id]?.approved_at);
   const { challenge } = pkce();
-  const res = await fetch(`${base}/authorize?${authorizeQuery(client.client_id, challenge)}`, { redirect: "manual" });
+  const back = await signIn(client.client_id, challenge);
+  assert.ok(back.searchParams.get("code"));
+});
+
+test("an auto-approved client that never signed in expires after 24 h", async () => {
+  const client = await (await register()).json();
+  clock += PENDING_CLIENT_TTL_MS + 1000;
+  try {
+    assert.equal((await register()).status, 201);
+    assert.equal(store.data.clients[client.client_id], undefined);
+  } finally {
+    clock -= PENDING_CLIENT_TTL_MS + 1000;
+  }
+});
+
+test("a pending loopback client gets an approval page and no code; once approved it signs in", async () => {
+  const LOOP = "http://localhost:3118/callback";
+  const client = await (await register(LOOP)).json();
+  const { challenge } = pkce();
+  const res = await fetch(`${base}/authorize?${authorizeQuery(client.client_id, challenge, LOOP)}`, { redirect: "manual" });
   assert.equal(res.status, 403);
   assert.equal(res.headers.get("set-cookie"), null);
   const html = await res.text();
@@ -523,14 +543,15 @@ test("a pending client gets an approval page and no code; once approved it signs
   assert.ok(html.includes(new Date(client.client_id_issued_at * 1000).toISOString()));
   assert.ok(!html.includes("oauth/google/start"));
   store.update((s) => approveClient(s, client.client_id, clock));
-  const back = await signIn(client.client_id, challenge);
+  const back = await signIn(client.client_id, challenge, LOOP);
   assert.ok(back.searchParams.get("code"));
 });
 
 test("DCR never evicts: full registry refuses; approved clients survive; pending ones expire after 24 h", async () => {
   const saved = structuredClone(store.data.clients);
   try {
-    const approved = await approvedClient();
+    // Host-approved (loopback) client: never expires, unlike an auto-approved one that never signed in.
+    const approved = await approvedClient("http://localhost:3118/callback");
     store.update((s) => {
       for (let i = Object.keys(s.clients).length; i < MAX_CLIENTS; i++) {
         s.clients[`filler-${i}`] = { client_id: `filler-${i}`, client_id_issued_at: Math.floor(clock / 1000), redirect_uris: [CLAUDE_CB] };
