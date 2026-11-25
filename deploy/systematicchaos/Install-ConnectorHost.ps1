@@ -10,8 +10,9 @@
      (PORT, PUBLIC_BASE_URL) is written: other dev servers read those, and one landing on the Funnel port would be served
      publicly without auth. Removes PORT / PUBLIC_BASE_URL User values that the previous installer version wrote
      (only when they still hold the values it wrote: PORT=8787, PUBLIC_BASE_URL=this node's Funnel URL).
-  4. Registers Scheduled Task "multi-google-connector": at the current user's logon, interactive token (no stored password),
-     restart every minute on failure, no time limit. Starts it. Start-Connector.ps1 turns the Funnel mount on only once
+  4. Registers Scheduled Task "multi-google-connector" as an S4U task (runs whether or not the user is signed in; no stored
+     password): at logon, plus every 5 minutes, so it comes back on its own after a reboot with no one signed in;
+     one instance at a time; restart every minute on failure; no time limit. Starts it. Start-Connector.ps1 turns the Funnel mount on only once
      node listens, and off whenever node exits.
   5. Prints the connector URL to paste into claude.ai Settings > Connectors.
   No password, autologon or stored credential is used or written.
@@ -94,10 +95,16 @@ $startScript = Join-Path $PSScriptRoot 'Start-Connector.ps1'
 # Account name as Windows resolves it. "$env:USERDOMAIN\$env:USERNAME" is WORKGROUP\<user> on a non-domain
 # (Microsoft-account) login, which Register-ScheduledTask cannot map to a SID.
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-if ($PSCmdlet.ShouldProcess($TaskName, 'Register Scheduled Task (at logon, restart on failure)')) {
+if ($PSCmdlet.ShouldProcess($TaskName, 'Register Scheduled Task (S4U; at logon and every 5 min; restart on failure)')) {
   $action = New-ScheduledTaskAction -Execute $pwsh -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -File `"$startScript`" -RepoPath `"$RepoPath`"" -WorkingDirectory $RepoPath
-  $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
-  $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+  # An Interactive task never starts after a reboot until someone signs in (2026-11-25 outage). S4U runs with no one
+  # signed in and needs no admin rights or stored password; the 5-minute repetition (IgnoreNew) restarts it after a
+  # reboot or a kill, since a boot trigger would need elevation.
+  $trigger = @(
+    (New-ScheduledTaskTrigger -AtLogOn -User $user),
+    (New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5))
+  )
+  $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
   $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
     -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
     -MultipleInstances IgnoreNew
